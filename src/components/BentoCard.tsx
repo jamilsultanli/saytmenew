@@ -55,7 +55,7 @@ export const BentoCard = ({
               height={height}
             />
             {/* Gradient Overlay for Text Readability */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
           </>
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-muted to-background" />
