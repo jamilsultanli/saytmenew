@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "@/components/theme-provider";
 import { GlobalScripts } from "@/components/GlobalScripts";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -23,6 +24,7 @@ const queryClient = new QueryClient({
       staleTime: 1000 * 60 * 5, // Data remains fresh for 5 minutes
       gcTime: 1000 * 60 * 30, // Cache remains for 30 minutes
       refetchOnWindowFocus: false, // Prevent refetching when switching tabs
+      retry: 1, // Only retry failed requests once
     },
   },
 });
@@ -35,23 +37,25 @@ const PageLoader = () => (
 
 const App = () => (
   <HelmetProvider>
-    <GlobalScripts />
     <QueryClientProvider client={queryClient}>
+      <GlobalScripts />
       <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <BrowserRouter>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
-                <Route path="/" element={<Index />} />
-                <Route path="/post/:slug" element={<PostDetail />} />
-                <Route path="/login" element={<Login />} />
-                <Route path="/admin" element={<Admin />} />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </Suspense>
-          </BrowserRouter>
+          <ErrorBoundary>
+            <BrowserRouter>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/post/:slug" element={<PostDetail />} />
+                  <Route path="/login" element={<Login />} />
+                  <Route path="/admin" element={<Admin />} />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </Suspense>
+            </BrowserRouter>
+          </ErrorBoundary>
         </TooltipProvider>
       </ThemeProvider>
     </QueryClientProvider>

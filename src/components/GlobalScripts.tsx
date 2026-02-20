@@ -1,30 +1,25 @@
-import { useEffect, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
 export const GlobalScripts = () => {
-  const [analyticsId, setAnalyticsId] = useState<string | null>(null);
-  const [gtmId, setGtmId] = useState<string | null>(null);
-  const [gscCode, setGscCode] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchSettings = async () => {
+  const { data: settings } = useQuery({
+    queryKey: ['siteSettings'],
+    queryFn: async () => {
       const { data } = await supabase
         .from('site_settings')
         .select('google_analytics_id, google_tag_manager_id, google_search_console_code')
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
+      return data;
+    },
+    staleTime: Infinity, // Settings rarely change during session
+  });
 
-      if (data) {
-        setAnalyticsId(data.google_analytics_id);
-        setGtmId(data.google_tag_manager_id);
-        setGscCode(data.google_search_console_code);
-      }
-    };
-
-    fetchSettings();
-  }, []);
+  const analyticsId = settings?.google_analytics_id;
+  const gtmId = settings?.google_tag_manager_id;
+  const gscCode = settings?.google_search_console_code;
 
   return (
     <Helmet>
@@ -63,7 +58,3 @@ export const GlobalScripts = () => {
     </Helmet>
   );
 };
-
-// GTM Body part needs to be separate or handled in index.html manually, 
-// but modern React often skips the noscript part or we can try to inject it via standard DOM if needed.
-// For Helmet, standard practice is usually just the Head script for SPA tracking.
