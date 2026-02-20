@@ -187,7 +187,7 @@ const Index = () => {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 auto-rows-[300px] animate-in fade-in duration-500">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6 auto-rows-[300px] animate-in fade-in duration-500">
             {posts.map((post, index) => (
               <Link 
                 to={`/post/${post.slug}`}

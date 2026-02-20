@@ -1,104 +1,98 @@
-import { cn } from "@/lib/utils";
-import { Clock } from "lucide-react";
-import { optimizeImage, generateSrcSet } from "@/utils/image-optimizer";
+"use client";
 
-interface BentoCardProps {
+import { cn } from "@/lib/utils";
+import { optimizeImage } from "@/utils/image-optimizer";
+import { cva, type VariantProps } from "class-variance-authority";
+import { ArrowUpRight } from "lucide-react";
+
+const colorVariants = cva("", {
+  variants: {
+    colorTheme: {
+      blue: "text-blue-400",
+      green: "text-green-400",
+      purple: "text-purple-400",
+      orange: "text-orange-400",
+      red: "text-red-400",
+      pink: "text-pink-400",
+      yellow: "text-yellow-400",
+    },
+  },
+  defaultVariants: {
+    colorTheme: "blue",
+  },
+});
+
+interface BentoCardProps extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof colorVariants> {
+  size?: 'standard' | 'hero' | 'wide' | 'square' | null;
   title: string;
   category: string;
-  readTime: string;
-  image?: string;
-  className?: string;
-  size?: "hero" | "square" | "wide" | "standard";
-  colorTheme?: "blue" | "pink" | "yellow";
+  readTime?: string | null;
+  image?: string | null;
   icon?: React.ReactNode;
-  priority?: boolean; // New prop for LCP optimization
+  priority?: boolean;
 }
 
 export const BentoCard = ({
+  className,
+  size = 'standard',
   title,
   category,
   readTime,
+  colorTheme,
   image,
-  className,
-  size = "standard",
-  colorTheme = "blue",
   icon,
   priority = false,
+  ...props
 }: BentoCardProps) => {
-  
-  // Determine image sizes based on card size
-  // These are approximate widths for responsive loading
-  const width = size === "hero" ? 800 : size === "wide" ? 600 : 400;
-  const height = size === "hero" ? 600 : size === "wide" ? 400 : 400;
+  const titleSize = size === 'hero' ? 'text-3xl md:text-4xl' : 'text-xl md:text-2xl';
 
   return (
     <div
       className={cn(
-        "group relative overflow-hidden rounded-3xl cursor-pointer h-full border border-border shadow-sm transition-all duration-500 hover:shadow-xl",
-        "bg-card text-card-foreground", 
+        "relative w-full h-full overflow-hidden rounded-3xl border border-transparent bg-muted/30 group",
+        "transition-all duration-500 ease-in-out hover:shadow-2xl hover:border-primary/20",
         className
       )}
+      {...props}
     >
-      {/* Background Image / Content */}
-      <div className="absolute inset-0 transition-transform duration-700 group-hover:scale-105">
-        {image ? (
-          <>
-            <img
-              src={optimizeImage(image, width, height)}
-              srcSet={generateSrcSet(image, [400, 600, 800, 1200])}
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              alt={title}
-              className="w-full h-full object-cover transition-opacity duration-500"
-              loading={priority ? "eager" : "lazy"}
-              {...(priority ? { fetchPriority: "high" } : {})}
-              width={width}
-              height={height}
-            />
-            {/* Gradient Overlay for Text Readability */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-80 group-hover:opacity-70 transition-opacity" />
-          </>
-        ) : (
-          <div className="absolute inset-0 bg-gradient-to-br from-muted to-background" />
-        )}
+      {image && (
+        <img
+          src={optimizeImage(image, 1000)}
+          alt={title}
+          loading={priority ? "eager" : "lazy"}
+          fetchPriority={priority ? "high" : "auto"}
+          className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-in-out group-hover:scale-105"
+        />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
+      
+      <div className="absolute top-5 right-5 p-2 bg-black/30 backdrop-blur-sm rounded-full opacity-0 group-hover:opacity-100 transition-opacity duration-300 -translate-y-2 group-hover:translate-y-0">
+        <ArrowUpRight className="w-5 h-5 text-white" />
       </div>
 
-      {/* Content Overlay */}
-      <div className="relative h-full flex flex-col justify-end p-6 z-10">
-        {/* Icon for square cards */}
-        {size === "square" && icon && (
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[80%] mb-4">
-             <div className="w-20 h-20 rounded-2xl bg-background/20 backdrop-blur-md border border-white/20 flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform duration-500 text-white">
-               {icon}
-             </div>
-          </div>
-        )}
-
-        <div className={cn("space-y-3 transition-transform duration-300 group-hover:-translate-y-1", size === "square" && "text-center")}>
-          <h3 className={cn("font-bold leading-tight", 
-            image ? "text-white" : "text-card-foreground",
-            size === "hero" ? "text-3xl md:text-4xl max-w-lg" : 
-            size === "square" ? "text-lg" : 
-            "text-xl"
-          )}>
-            {title}
-          </h3>
-          
-          <div className={cn("flex items-center gap-3 text-sm", size === "square" && "justify-center")}>
-            <div className={cn("flex items-center gap-1.5", image ? "text-gray-300" : "text-muted-foreground")}>
-              <Clock className="w-3.5 h-3.5" />
-              <span>{readTime}</span>
-            </div>
-            <span className={cn("px-3 py-1 rounded-full text-xs font-medium border backdrop-blur-sm", 
-              image ? "bg-white/10 text-white border-white/20" : "bg-secondary text-secondary-foreground border-border"
-            )}>
+      <div className="relative flex flex-col justify-end h-full p-6 text-white z-10">
+        <div className="space-y-3 transition-transform duration-300 group-hover:-translate-y-1">
+          <div className="flex items-center gap-3 text-sm font-medium">
+            <span className={cn("font-semibold", colorVariants({ colorTheme }))}>
               {category}
             </span>
+            {readTime && (
+              <>
+                <span className="text-white/50">•</span>
+                <span className="text-white/80">{readTime}</span>
+              </>
+            )}
           </div>
+          <h3 className={`font-bold leading-tight text-balance ${titleSize}`}>
+            {title}
+          </h3>
         </div>
+        {icon && size === 'square' && (
+          <div className="absolute top-6 left-6 text-white/50">
+            {icon}
+          </div>
+        )}
       </div>
-      
-      {/* Hover Light Effect */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none bg-gradient-to-br from-white/5 to-transparent mix-blend-overlay" />
     </div>
   );
 };
