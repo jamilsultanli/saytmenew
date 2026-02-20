@@ -1,9 +1,10 @@
 import { Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ModeToggle } from "./mode-toggle";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { optimizeImage } from "@/utils/image-optimizer";
+import { useQuery } from "@tanstack/react-query";
 
 interface NavbarProps {
   onSearchChange?: (value: string) => void;
@@ -11,38 +12,25 @@ interface NavbarProps {
 }
 
 export const Navbar = ({ onSearchChange, searchValue }: NavbarProps) => {
-  const [siteName, setSiteName] = useState("Sayt.me");
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
 
-  const fetchSettings = async () => {
-    try {
-      // Get the most recently UPDATED setting
-      const { data, error } = await supabase
+  // Use React Query for caching and automatic updates
+  const { data: settings } = useQuery({
+    queryKey: ['siteSettings'],
+    queryFn: async () => {
+      const { data } = await supabase
         .from('site_settings')
-        .select('site_name, logo_url')
+        .select('*')
         .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
-        
-      if (!error && data) {
-        if (data.site_name) setSiteName(data.site_name);
-        if (data.logo_url) {
-            setLogoUrl(data.logo_url);
-            setImageError(false); // Reset error state
-        }
-      }
-    } catch (e) {
-      console.log("Using default site settings");
-    }
-  };
+      return data;
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
 
-  useEffect(() => {
-    fetchSettings();
-    const handleUpdate = () => fetchSettings();
-    window.addEventListener('settings-updated', handleUpdate);
-    return () => window.removeEventListener('settings-updated', handleUpdate);
-  }, []);
+  const siteName = settings?.site_name || "Sayt.me";
+  const logoUrl = settings?.logo_url;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 px-6 py-4 transition-all duration-300 bg-background/80 backdrop-blur-md border-b border-border">

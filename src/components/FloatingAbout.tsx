@@ -1,4 +1,4 @@
-import { User, Github, Linkedin, Loader2, Mail } from "lucide-react";
+import { User, Linkedin, Loader2, Mail } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -7,42 +7,24 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Database } from "@/integrations/supabase/types";
 import { optimizeImage } from "@/utils/image-optimizer";
-
-type Settings = Database['public']['Tables']['site_settings']['Row'];
+import { useQuery } from "@tanstack/react-query";
 
 export const FloatingAbout = () => {
-  const [settings, setSettings] = useState<Settings | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('site_settings')
-          .select('*')
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        
-        if (data) setSettings(data);
-      } catch (e) {
-        console.error("Error fetching about info", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchSettings();
-    
-    // Listen for updates
-    const handleUpdate = () => fetchSettings();
-    window.addEventListener('settings-updated', handleUpdate);
-    return () => window.removeEventListener('settings-updated', handleUpdate);
-  }, []);
+  const { data: settings, isLoading } = useQuery({
+    queryKey: ['siteSettings'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('site_settings')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
 
   // Parse social links
   const socialLinks = (settings?.social_links as any) || {};
@@ -81,7 +63,7 @@ export const FloatingAbout = () => {
           </DialogDescription>
         </DialogHeader>
         
-        {loading ? (
+        {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div>
         ) : (
           <div className="flex flex-col gap-6 py-4">
