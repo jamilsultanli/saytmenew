@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { SEO } from "@/components/SEO";
 import { useTheme } from "@/components/theme-provider";
-import { useQuery } from "@tanstack/react-query";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -27,20 +27,8 @@ const Login = () => {
     return () => subscription.unsubscribe();
   }, [navigate]);
 
-  // Fetch Settings (Shared Cache)
-  const { data: settings } = useQuery({
-    queryKey: ['siteSettings'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('site_settings')
-        .select('site_name')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data;
-    },
-    staleTime: 1000 * 60 * 5,
-  });
+  // Use the new centralized hook
+  const { data: settings } = useSiteSettings();
 
   const siteName = settings?.site_name || "Admin Panel";
 

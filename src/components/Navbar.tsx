@@ -2,9 +2,8 @@ import { Search } from "lucide-react";
 import { Link } from "react-router-dom";
 import { ModeToggle } from "./mode-toggle";
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { optimizeImage } from "@/utils/image-optimizer";
-import { useQuery } from "@tanstack/react-query";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 
 interface NavbarProps {
   onSearchChange?: (value: string) => void;
@@ -14,20 +13,8 @@ interface NavbarProps {
 export const Navbar = ({ onSearchChange, searchValue }: NavbarProps) => {
   const [imageError, setImageError] = useState(false);
 
-  // Use React Query for caching and automatic updates
-  const { data: settings } = useQuery({
-    queryKey: ['siteSettings'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('site_settings')
-        .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data;
-    },
-    staleTime: 1000 * 60 * 5, // 5 minutes
-  });
+  // Use the new centralized hook
+  const { data: settings } = useSiteSettings();
 
   const siteName = settings?.site_name || "Sayt.me";
   const logoUrl = settings?.logo_url;
@@ -52,6 +39,7 @@ export const Navbar = ({ onSearchChange, searchValue }: NavbarProps) => {
                <span className="text-xl font-bold">{siteName.charAt(0)}</span>
             </div>
           )}
+          <span className="font-bold text-lg hidden sm:block">{siteName}</span>
         </Link>
 
         {/* Search Bar */}

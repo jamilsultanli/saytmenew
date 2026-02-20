@@ -7,24 +7,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
 import { optimizeImage } from "@/utils/image-optimizer";
-import { useQuery } from "@tanstack/react-query";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 
 export const FloatingAbout = () => {
-  const { data: settings, isLoading } = useQuery({
-    queryKey: ['siteSettings'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('site_settings')
-        .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data;
-    },
-    staleTime: 1000 * 60 * 5,
-  });
+  const { data: settings, isLoading } = useSiteSettings();
 
   // Parse social links
   const socialLinks = (settings?.social_links as any) || {};

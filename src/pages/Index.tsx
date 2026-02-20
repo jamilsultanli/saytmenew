@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 
 type Post = Database['public']['Tables']['posts']['Row'] & {
   categories: Database['public']['Tables']['categories']['Row']
@@ -22,19 +23,8 @@ const Index = () => {
   const debouncedSearch = useDebounce(searchQuery, 500);
   const activeCategory = searchParams.get("category") || "all";
 
-  // Fetch Site Settings
-  const { data: settings } = useQuery({
-    queryKey: ['siteSettings'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('site_settings')
-        .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      return data;
-    }
-  });
+  // Use the new centralized hook
+  const { data: settings } = useSiteSettings();
 
   // Fetch Categories
   const { data: categories = [], isLoading: catsLoading } = useQuery({

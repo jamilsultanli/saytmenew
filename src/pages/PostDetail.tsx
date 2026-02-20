@@ -14,6 +14,7 @@ import { BentoCard } from "@/components/BentoCard";
 import { getIconForCategory } from "@/utils/icon-mapping";
 import { optimizeImage, generateSrcSet } from "@/utils/image-optimizer";
 import { useQuery } from "@tanstack/react-query";
+import { useSiteSettings } from "@/hooks/use-site-settings";
 
 type Post = Database['public']['Tables']['posts']['Row'] & {
   categories: Database['public']['Tables']['categories']['Row']
@@ -23,15 +24,8 @@ const PostDetail = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
 
-  // Fetch Settings (Cached)
-  const { data: siteSettings } = useQuery({
-    queryKey: ['siteSettings'],
-    queryFn: async () => {
-      const { data } = await supabase.from('site_settings').select('favicon_url, author_name, author_image').single();
-      return data;
-    },
-    staleTime: 1000 * 60 * 30 // 30 minutes
-  });
+  // Use the new centralized hook
+  const { data: siteSettings } = useSiteSettings();
 
   // Fetch Post
   const { data: post, isLoading, isError } = useQuery({
