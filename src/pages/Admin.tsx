@@ -294,6 +294,39 @@ const Admin = () => {
                 <div className="grid gap-2">
                   <Label>Məzmun</Label>
                   <div className="prose-editor-wrapper">
+                    {/* Custom CSS for Quill Dark Mode compatibility */}
+                    <style>{`
+                      .prose-editor-wrapper .ql-toolbar {
+                        border-color: hsl(var(--border));
+                        border-top-left-radius: 0.5rem;
+                        border-top-right-radius: 0.5rem;
+                        background-color: hsl(var(--muted));
+                      }
+                      .prose-editor-wrapper .ql-container {
+                        border-color: hsl(var(--border));
+                        border-bottom-left-radius: 0.5rem;
+                        border-bottom-right-radius: 0.5rem;
+                        background-color: hsl(var(--background));
+                        color: hsl(var(--foreground));
+                        font-family: inherit;
+                        font-size: 1rem;
+                        min-height: 250px;
+                      }
+                      .prose-editor-wrapper .ql-picker-label {
+                        color: hsl(var(--foreground));
+                      }
+                      .prose-editor-wrapper .ql-stroke {
+                        stroke: hsl(var(--foreground));
+                      }
+                      .prose-editor-wrapper .ql-fill {
+                        fill: hsl(var(--foreground));
+                      }
+                      .prose-editor-wrapper .ql-picker-options {
+                        background-color: hsl(var(--popover));
+                        color: hsl(var(--popover-foreground));
+                        border-color: hsl(var(--border));
+                      }
+                    `}</style>
                     <ReactQuill 
                       theme="snow"
                       value={formContent} 
@@ -529,7 +562,12 @@ const Admin = () => {
         setLogoFile(null);
         setFavFile(null);
       } catch (e: any) {
-        toast.error("Xəta: " + e.message);
+        console.error(e);
+        if (e.message?.includes("hero_description") || e.message?.includes("column")) {
+             toast.error("Xəta: Bazada yeni sütunlar yoxdur. Zəhmət olmasa SQL əmrini işlədin.");
+        } else {
+             toast.error("Xəta: " + e.message);
+        }
       } finally {
         setSaving(false);
       }
