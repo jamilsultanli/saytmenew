@@ -12,7 +12,6 @@ import { SEO } from "@/components/SEO";
 import { toast } from "sonner";
 import { BentoCard } from "@/components/BentoCard";
 import { getIconForCategory } from "@/utils/icon-mapping";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 type Post = Database['public']['Tables']['posts']['Row'] & {
   categories: Database['public']['Tables']['categories']['Row']
@@ -147,14 +146,6 @@ const PostDetail = () => {
            </h1>
 
            <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground border-t border-b border-border/50 py-4 w-fit mx-auto px-6">
-              <div className="flex items-center gap-2">
-                 <Avatar className="w-8 h-8 border border-border">
-                    <AvatarImage src={siteSettings?.author_image || ""} />
-                    <AvatarFallback>A</AvatarFallback>
-                 </Avatar>
-                 <span className="font-medium text-foreground">{siteSettings?.author_name || "Müəllif"}</span>
-              </div>
-              <span className="text-border mx-2 hidden sm:inline">•</span>
               <div className="flex items-center gap-2">
                  <Calendar className="w-4 h-4" />
                  {post.published_at && format(new Date(post.published_at), "d MMMM yyyy", { locale: az })}
