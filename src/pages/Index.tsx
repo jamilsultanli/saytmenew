@@ -7,6 +7,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getIconForCategory } from "@/utils/icon-mapping";
 import { Loader2 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 
 type Post = Database['public']['Tables']['posts']['Row'] & {
   categories: Database['public']['Tables']['categories']['Row']
@@ -46,6 +48,11 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-[#050505] selection:bg-cyan-500/30">
+      <Helmet>
+        <title>MARKETİNQ NÜMUNƏLƏRİ | Real Strategiyalar</title>
+        <meta name="description" content="Real marketinq nümunələri və strategiyaları. Dünyanın ən böyük şirkətlərinin uğur hekayələri." />
+      </Helmet>
+      
       <Navbar />
       
       <main className="max-w-7xl mx-auto px-4 md:px-6 pt-32 pb-20">
@@ -64,7 +71,8 @@ const Index = () => {
           /* Bento Grid */
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 auto-rows-[300px]">
             {filteredPosts.map((post) => (
-              <div 
+              <Link 
+                to={`/post/${post.slug}`}
                 key={post.id}
                 className={
                   post.card_size === 'hero' ? "md:col-span-2 md:row-span-2" :
@@ -82,7 +90,7 @@ const Index = () => {
                   icon={post.card_size === 'square' ? getIconForCategory(post.categories?.slug || '') : undefined}
                   className="h-full"
                 />
-              </div>
+              </Link>
             ))}
           </div>
         )}
