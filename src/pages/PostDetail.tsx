@@ -202,7 +202,7 @@ const PostDetail = () => {
             )}
           </div>
 
-          <h1 className="text-3xl md:text-5xl font-bold leading-tight tracking-tight">
+          <h1 className="text-3xl md:text-5xl font-bold leading-tight tracking-tight text-balance">
             {post.title_az}
           </h1>
         </div>
@@ -219,9 +219,11 @@ const PostDetail = () => {
         )}
 
         {/* Content Body */}
+        {/* Added prose-p:hyphens-none hyphens-none to prevent word breaking */}
         <article className="prose prose-lg dark:prose-invert max-w-none 
           prose-headings:font-bold prose-headings:tracking-tight 
           prose-p:leading-relaxed prose-p:text-muted-foreground/90 
+          prose-p:hyphens-none hyphens-none
           prose-a:text-primary prose-a:no-underline prose-a:font-medium hover:prose-a:underline
           prose-img:rounded-3xl prose-img:shadow-md prose-img:w-full prose-img:border prose-img:border-border/50
           prose-li:marker:text-primary 
