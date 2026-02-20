@@ -6,9 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, Settings, User, Mail, Linkedin, LineChart, Save, Image as ImageIcon, Globe } from "lucide-react";
+import { Loader2, Settings, User, Mail, Linkedin, LineChart, Save, Image as ImageIcon, Globe, Database as DbIcon } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { seedDatabase } from "@/utils/seed";
 
 type SettingsType = Database['public']['Tables']['site_settings']['Row'];
 
@@ -18,8 +19,9 @@ export const SettingsManager = () => {
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [favFile, setFavFile] = useState<File | null>(null);
     const [authorFile, setAuthorFile] = useState<File | null>(null);
+    const [isSeeding, setIsSeeding] = useState(false);
 
-    const { data: settings } = useQuery({
+    const { data: settings, isLoading } = useQuery({
       queryKey: ['admin-settings'],
       queryFn: async () => {
         const { data } = await supabase.from('site_settings').select('*').order('updated_at', { ascending: false }).limit(1).maybeSingle();
@@ -47,6 +49,22 @@ export const SettingsManager = () => {
 
     const handleChange = (field: string, value: string) => {
       setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleSeed = async () => {
+      if(!confirm("Demo məlumatlar yüklənsin? Bu mövcud bəzi məlumatları əvəzləyə bilər.")) return;
+      setIsSeeding(true);
+      try {
+        await seedDatabase();
+        queryClient.invalidateQueries({ queryKey: ['admin-settings'] });
+        queryClient.invalidateQueries({ queryKey: ['siteSettings'] });
+        // Force reload to ensure everything syncs up
+        window.location.reload();
+      } catch (e) {
+        // Error handled in seed function
+      } finally {
+        setIsSeeding(false);
+      }
     };
 
     const saveSettingsMutation = useMutation({
@@ -109,10 +127,36 @@ export const SettingsManager = () => {
       onError: (err) => toast.error(err.message)
     });
 
-    if (!settings && !formData.site_name) return <div>Yüklənir...</div>;
+    if (isLoading) return <div>Yüklənir...</div>;
+
+    // Show empty state if no settings exist
+    if (!settings && !formData.site_name) {
+       return (
+          <div className="max-w-2xl mx-auto text-center py-20 space-y-6 animate-in fade-in-50">
+             <div className="mx-auto w-20 h-20 bg-muted rounded-full flex items-center justify-center">
+                <Settings className="w-10 h-10 text-muted-foreground" />
+             </div>
+             <h2 className="text-2xl font-bold">Sayt Ayarları Tapılmadı</h2>
+             <p className="text-muted-foreground max-w-md mx-auto">
+               Görünür bazada hələ heç bir ayar yoxdur. Zəhmət olmasa "Demo Məlumatları Yüklə" düyməsini sıxın.
+             </p>
+             <Button onClick={handleSeed} disabled={isSeeding} size="lg">
+               {isSeeding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DbIcon className="mr-2 h-4 w-4" />}
+               Demo Ayarları Yüklə
+             </Button>
+          </div>
+       );
+    }
 
     return (
       <div className="max-w-2xl mx-auto animate-in fade-in-50">
+        <div className="flex justify-end mb-6">
+           <Button variant="outline" size="sm" onClick={handleSeed} disabled={isSeeding} className="text-xs">
+              {isSeeding ? <Loader2 className="mr-2 h-3 w-3 animate-spin" /> : <DbIcon className="mr-2 h-3 w-3" />}
+              Demo Reset
+           </Button>
+        </div>
+
         <Card>
           <CardHeader>
              <CardTitle>Sayt Ayarları</CardTitle>
@@ -130,6 +174,14 @@ export const SettingsManager = () => {
                  <div className="grid gap-2">
                    <Label>Təsvir (SEO Description)</Label>
                    <Textarea value={formData.site_description || ""} onChange={(e) => handleChange('site_description', e.target.value)} />
+                 </div>
+                 <div className="grid gap-2">
+                   <Label>Hero Başlığı (Ana Səhifə)</Label>
+                   <Input value={formData.hero_title || ""} onChange={(e) => handleChange('hero_title', e.target.value)} />
+                 </div>
+                 <div className="grid gap-2">
+                   <Label>Hero Təsviri (Ana Səhifə)</Label>
+                   <Textarea value={formData.hero_description || ""} onChange={(e) => handleChange('hero_description', e.target.value)} />
                  </div>
               </div>
 

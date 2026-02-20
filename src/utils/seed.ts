@@ -33,9 +33,6 @@ export const seedDatabase = async () => {
       if (catError.code === "42501") {
         throw new Error("İcazə rədd edildi (RLS Policy). Zəhmət olmasa Supabase SQL Editor-da RLS siyasətlərini yeniləyin.");
       }
-      if (catError.message.includes("Could not find") || catError.code === "42P01") {
-         throw new Error("Cədvəllər tapılmadı. Zəhmət olmasa əvvəlcə SQL kodunu işlədərək bazanı qurun.");
-      }
       throw new Error("Kateqoriya xətası: " + catError.message);
     }
 
@@ -136,12 +133,34 @@ export const seedDatabase = async () => {
       throw new Error("Məqalə xətası: " + postError.message);
     }
 
-    toast.success("Demo məlumatlar uğurla yükləndi!", { id: toastId });
+    // 3. Insert Default Site Settings if Empty
+    const { data: existingSettings } = await supabase.from('site_settings').select('id').limit(1);
+
+    if (!existingSettings || existingSettings.length === 0) {
+      const defaultSettings = {
+        site_name: "Marketinq Bilik Bazası",
+        site_description: "Real brendinq strategiyaları, uğur hekayələri və marketinq analizləri.",
+        hero_title: "Marketinq Strategiyaları",
+        hero_description: "Dünya brendlərinin uğur hekayələrini və analizlərini kəşf edin.",
+        footer_text: `© ${new Date().getFullYear()} Marketinq Nümunələri. Bütün hüquqlar qorunur.`,
+        author_name: "Admin",
+        about_text: "Bu platforma marketinq sahəsindəki ən son tendensiyaları və case study-ləri Azərbaycan dilində oxuculara çatdırmaq üçün yaradılmışdır.",
+        logo_url: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=100&auto=format&fit=crop", // Placeholder logo
+        favicon_url: "https://images.unsplash.com/photo-1611162617474-5b21e879e113?q=80&w=32&auto=format&fit=crop",
+      };
+
+      const { error: settingsError } = await supabase.from('site_settings').insert(defaultSettings);
+
+      if (settingsError) {
+         console.error("Settings seed error:", settingsError);
+      }
+    }
+
+    toast.success("Demo məlumatlar və sayt ayarları uğurla yükləndi!", { id: toastId });
     return true;
   } catch (error: any) {
     console.error(error);
     toast.error(error.message || "Xəta baş verdi", { id: toastId });
-    // Important: Propagate the error so Admin component knows about it
     throw error;
   }
 };
