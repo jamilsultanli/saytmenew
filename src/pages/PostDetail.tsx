@@ -2,6 +2,7 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { FloatingAbout } from "@/components/FloatingAbout";
+import { ReadingProgress } from "@/components/ReadingProgress";
 import { Database } from "@/integrations/supabase/types";
 import { Clock, Calendar, ChevronLeft, Share2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -112,7 +113,8 @@ const PostDetail = () => {
         schema={[articleSchema]}
         favicon={siteSettings?.favicon_url || undefined}
       />
-
+      
+      <ReadingProgress />
       <Navbar />
       <FloatingAbout />
 

@@ -10,6 +10,7 @@ import { SEO } from "@/components/SEO";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
+import { useDebounce } from "@/hooks/use-debounce";
 
 type Post = Database['public']['Tables']['posts']['Row'] & {
   categories: Database['public']['Tables']['categories']['Row']
@@ -18,6 +19,7 @@ type Post = Database['public']['Tables']['posts']['Row'] & {
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
+  const debouncedSearch = useDebounce(searchQuery, 500);
   const activeCategory = searchParams.get("category") || "all";
 
   // Fetch Site Settings
@@ -46,16 +48,34 @@ const Index = () => {
     }
   });
 
-  // Fetch Posts
+  // Fetch Posts with Server-Side Filtering
   const { data: posts = [], isLoading: postsLoading } = useQuery({
-    queryKey: ['posts'],
+    queryKey: ['posts', activeCategory, debouncedSearch],
     queryFn: async () => {
-      const { data } = await supabase
+      let query = supabase
         .from('posts')
-        .select(`*, categories:category_id (*)`)
+        .select(`*, categories:category_id!inner(*)`)
         .order('published_at', { ascending: false });
+
+      if (activeCategory !== 'all') {
+        // We use !inner join to filter by related table column
+        query = query.eq('categories.slug', activeCategory);
+      }
+
+      if (debouncedSearch) {
+        query = query.ilike('title_az', `%${debouncedSearch}%`);
+      }
+
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error("Error fetching posts:", error);
+        throw error;
+      }
+      
       return (data as unknown as Post[]) || [];
-    }
+    },
+    staleTime: 1000 * 60 * 2 // Cache for 2 minutes
   });
 
   const loading = catsLoading || postsLoading;
@@ -68,13 +88,6 @@ const Index = () => {
     }
     setSearchParams(searchParams);
   };
-
-  const filteredPosts = posts.filter(post => {
-    const matchesCategory = activeCategory === "all" || post.categories?.slug === activeCategory;
-    const title = post.title_az || "";
-    const matchesSearch = title.toLowerCase().includes((searchQuery || "").toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
 
   // --- Dynamic SEO Logic ---
   const activeCategoryData = categories.find(c => c.slug === activeCategory);
@@ -164,15 +177,15 @@ const Index = () => {
              <Skeleton className="md:col-span-1 md:row-span-1 rounded-3xl" />
              <Skeleton className="md:col-span-2 md:row-span-1 rounded-3xl" />
           </div>
-        ) : filteredPosts.length === 0 ? (
+        ) : posts.length === 0 ? (
           <div className="text-center py-20 border border-dashed border-border rounded-3xl bg-muted/20 animate-in zoom-in-95 duration-300">
             <h2 className="text-2xl font-bold mb-4">
-              {posts.length === 0 ? "Hələlik heç bir məqalə yoxdur" : "Axtarışa uyğun nəticə tapılmadı"}
+              {debouncedSearch ? "Axtarışa uyğun nəticə tapılmadı" : "Hələlik heç bir məqalə yoxdur"}
             </h2>
             <p className="text-muted-foreground">
-              {posts.length === 0 
-                ? "Admin panelindən məqalə əlavə edə bilərsiniz." 
-                : "Açar sözləri və ya kateqoriyanı dəyişərək yenidən cəhd edin."}
+              {debouncedSearch 
+                ? "Açar sözləri və ya kateqoriyanı dəyişərək yenidən cəhd edin." 
+                : "Admin panelindən məqalə əlavə edə bilərsiniz."}
             </p>
             {activeCategory !== 'all' && (
               <button 
@@ -185,7 +198,7 @@ const Index = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 auto-rows-[300px] animate-in fade-in duration-500">
-            {filteredPosts.map((post, index) => (
+            {posts.map((post, index) => (
               <Link 
                 to={`/post/${post.slug}`}
                 key={post.id}
