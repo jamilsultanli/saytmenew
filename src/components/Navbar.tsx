@@ -12,12 +12,15 @@ interface NavbarProps {
 
 export const Navbar = ({ onSearchChange, searchValue }: NavbarProps) => {
   const [siteName, setSiteName] = useState("Sayt.me");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    // Optional: Fetch site name from DB if you want dynamic branding
     const fetchSettings = async () => {
-      const { data } = await supabase.from('site_settings').select('site_name').single();
-      if (data?.site_name) setSiteName(data.site_name);
+      const { data } = await supabase.from('site_settings').select('site_name, logo_url').single();
+      if (data) {
+        if (data.site_name) setSiteName(data.site_name);
+        if (data.logo_url) setLogoUrl(data.logo_url);
+      }
     };
     fetchSettings();
   }, []);
@@ -27,11 +30,15 @@ export const Navbar = ({ onSearchChange, searchValue }: NavbarProps) => {
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 group cursor-pointer">
-          <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground shadow-lg overflow-hidden group-hover:scale-105 transition-transform">
-            <span className="text-xl font-bold">S</span>
-          </div>
+          {logoUrl ? (
+             <img src={logoUrl} alt={siteName} className="h-10 w-auto object-contain transition-transform group-hover:scale-105" />
+          ) : (
+            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground shadow-lg overflow-hidden group-hover:scale-105 transition-transform">
+              <span className="text-xl font-bold">{siteName.charAt(0)}</span>
+            </div>
+          )}
           <div className="flex flex-col">
-            <span className="text-lg font-bold tracking-tight leading-none">{siteName}</span>
+            <span className="text-lg font-bold tracking-tight leading-none hidden sm:block">{siteName}</span>
           </div>
         </Link>
 

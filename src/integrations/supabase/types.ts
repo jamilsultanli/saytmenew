@@ -15,6 +15,7 @@ export interface Database {
           site_name: string
           site_description: string | null
           logo_url: string | null
+          favicon_url: string | null
           footer_text: string | null
           social_links: Json | null
           updated_at: string
@@ -24,6 +25,7 @@ export interface Database {
           site_name?: string
           site_description?: string | null
           logo_url?: string | null
+          favicon_url?: string | null
           footer_text?: string | null
           social_links?: Json | null
           updated_at?: string
@@ -33,6 +35,7 @@ export interface Database {
           site_name?: string
           site_description?: string | null
           logo_url?: string | null
+          favicon_url?: string | null
           footer_text?: string | null
           social_links?: Json | null
           updated_at?: string

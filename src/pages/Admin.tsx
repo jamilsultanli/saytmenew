@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Upload, Trash2, ExternalLink, Database as DbIcon, AlertCircle, Copy, Check, Info, RefreshCw, Settings, PenTool, LayoutTemplate } from "lucide-react";
+import { Loader2, Upload, Trash2, ExternalLink, Database as DbIcon, AlertCircle, Copy, Check, Info, RefreshCw, Settings, PenTool, LayoutTemplate, Image as ImageIcon } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { seedDatabase } from "@/utils/seed";
 import { SEO } from "@/components/SEO";
@@ -26,13 +26,14 @@ import { SEO } from "@/components/SEO";
 type Category = Database['public']['Tables']['categories']['Row'];
 type Post = Database['public']['Tables']['posts']['Row'];
 
-// SQL TO CREATE SITE SETTINGS IF MISSING
+// SQL TO CREATE SITE SETTINGS IF MISSING (Updated with favicon)
 const SQL_FIX_SETTINGS = `
 CREATE TABLE IF NOT EXISTS public.site_settings (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   site_name TEXT DEFAULT 'Sayt.me',
   site_description TEXT,
   logo_url TEXT,
+  favicon_url TEXT,
   footer_text TEXT,
   social_links JSONB,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -44,8 +45,6 @@ INSERT INTO public.site_settings (site_name, site_description)
 SELECT 'Sayt.me', 'Mənim şəxsi bloqum'
 WHERE NOT EXISTS (SELECT 1 FROM public.site_settings);
 `;
-
-const PROJECT_ID = "qnpoftjwfwzgxmuzqauc";
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -73,6 +72,10 @@ const Admin = () => {
   const [siteDesc, setSiteDesc] = useState("");
   const [footerText, setFooterText] = useState("");
   const [settingsId, setSettingsId] = useState<string | null>(null);
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [faviconFile, setFaviconFile] = useState<File | null>(null);
+  const [currentLogo, setCurrentLogo] = useState<string | null>(null);
+  const [currentFavicon, setCurrentFavicon] = useState<string | null>(null);
 
   // Error/Dialog State
   const [showSqlDialog, setShowSqlDialog] = useState(false);
@@ -112,6 +115,8 @@ const Admin = () => {
       setSiteName(data.site_name || "");
       setSiteDesc(data.site_description || "");
       setFooterText(data.footer_text || "");
+      setCurrentLogo(data.logo_url);
+      setCurrentFavicon(data.favicon_url);
     }
   };
 
@@ -124,13 +129,12 @@ const Admin = () => {
     setSlug(generateSlug(e.target.value));
   };
 
-  const handleImageUpload = async () => {
-    if (!file) return null;
+  const uploadFile = async (file: File) => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random()}.${fileExt}`;
     const filePath = `${fileName}`;
     const { error } = await supabase.storage.from('images').upload(filePath, file);
-    if (error) return null;
+    if (error) throw error;
     const { data } = supabase.storage.from('images').getPublicUrl(filePath);
     return data.publicUrl;
   };
@@ -141,8 +145,7 @@ const Admin = () => {
     try {
       let thumbnailUrl = "";
       if (file) {
-        const url = await handleImageUpload();
-        if (url) thumbnailUrl = url;
+        thumbnailUrl = await uploadFile(file);
       }
 
       const { error } = await supabase.from('posts').insert({
@@ -172,26 +175,31 @@ const Admin = () => {
     e.preventDefault();
     setSubmitting(true);
     try {
+      let logoUrl = currentLogo;
+      let faviconUrl = currentFavicon;
+
+      if (logoFile) logoUrl = await uploadFile(logoFile);
+      if (faviconFile) faviconUrl = await uploadFile(faviconFile);
+
+      const payload = {
+        site_name: siteName,
+        site_description: siteDesc,
+        footer_text: footerText,
+        logo_url: logoUrl,
+        favicon_url: faviconUrl
+      };
+
       if (settingsId) {
-        const { error } = await supabase.from('site_settings').update({
-          site_name: siteName,
-          site_description: siteDesc,
-          footer_text: footerText
-        }).eq('id', settingsId);
+        const { error } = await supabase.from('site_settings').update(payload).eq('id', settingsId);
         if (error) throw error;
       } else {
-        // If no settings row exists yet
-         const { error } = await supabase.from('site_settings').insert({
-          site_name: siteName,
-          site_description: siteDesc,
-          footer_text: footerText
-        });
+         const { error } = await supabase.from('site_settings').insert(payload);
         if (error) throw error;
       }
       toast.success("Ayarlar yeniləndi!");
       fetchSettings();
     } catch (error: any) {
-      toast.error("Xəta: Cədvəl yoxdursa, aşağıdakı SQL kodunu işlədin.");
+      toast.error("Xəta baş verdi. Baza qurulubmu?");
       setShowSqlDialog(true);
     } finally {
       setSubmitting(false);
@@ -348,7 +356,7 @@ const Admin = () => {
             <Card>
               <CardHeader>
                 <CardTitle>Sayt Ayarları</CardTitle>
-                <CardDescription>Saytın adı, SEO və ümumi məlumatları buradan idarə edin.</CardDescription>
+                <CardDescription>Brendinq və SEO məlumatlarını idarə edin.</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSettingsSubmit} className="space-y-6">
@@ -360,6 +368,23 @@ const Admin = () => {
                   <div className="grid gap-2">
                     <Label>Sayt Haqqında (Description)</Label>
                     <Textarea value={siteDesc} onChange={(e) => setSiteDesc(e.target.value)} placeholder="Saytın qısa təsviri..." />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                     <div className="grid gap-2">
+                        <Label>Logo</Label>
+                        <div className="flex flex-col gap-2">
+                           {currentLogo && <img src={currentLogo} alt="Logo" className="h-10 w-auto object-contain border p-1 rounded" />}
+                           <Input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files?.[0] || null)} />
+                        </div>
+                     </div>
+                     <div className="grid gap-2">
+                        <Label>Favicon</Label>
+                         <div className="flex flex-col gap-2">
+                           {currentFavicon && <img src={currentFavicon} alt="Favicon" className="h-8 w-8 object-contain border p-1 rounded" />}
+                           <Input type="file" accept="image/*" onChange={(e) => setFaviconFile(e.target.files?.[0] || null)} />
+                        </div>
+                     </div>
                   </div>
 
                   <div className="grid gap-2">
@@ -374,7 +399,7 @@ const Admin = () => {
                 </form>
 
                 <div className="mt-8 p-4 bg-muted/30 rounded-lg text-xs text-muted-foreground">
-                  <p className="flex items-center gap-2 mb-2"><Info className="w-4 h-4" /> <strong>Qeyd:</strong> Əgər "Settings table not found" xətası alsanız:</p>
+                  <p className="flex items-center gap-2 mb-2"><Info className="w-4 h-4" /> <strong>Qeyd:</strong> Xəta baş verərsə SQL:</p>
                   <Button size="sm" variant="outline" onClick={() => setShowSqlDialog(true)} className="w-full">
                     SQL Kodunu Göstər
                   </Button>

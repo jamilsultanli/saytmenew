@@ -20,12 +20,19 @@ const PostDetail = () => {
   const navigate = useNavigate();
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
+  const [siteSettings, setSiteSettings] = useState<{favicon_url: string | null} | null>(null);
 
   useEffect(() => {
     if (slug) {
       fetchPost(slug);
     }
+    fetchSettings();
   }, [slug]);
+
+  const fetchSettings = async () => {
+    const { data } = await supabase.from('site_settings').select('favicon_url').single();
+    if (data) setSiteSettings(data);
+  };
 
   const fetchPost = async (slug: string) => {
     try {
@@ -54,6 +61,53 @@ const PostDetail = () => {
 
   if (!post) return null;
 
+  // Structured Data (Schema.org) for Google
+  const articleSchema = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    "headline": post.seo_title || post.title_az,
+    "description": post.seo_description,
+    "image": post.thumbnail_url ? [post.thumbnail_url] : [],
+    "datePublished": post.published_at,
+    "dateModified": post.updated_at || post.published_at,
+    "author": {
+      "@type": "Organization",
+      "name": "Sayt.me"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "Sayt.me",
+      "logo": {
+        "@type": "ImageObject",
+        "url": window.location.origin + "/placeholder.svg" // Fallback or dynamic logo
+      }
+    },
+    "mainEntityOfPage": {
+      "@type": "WebPage",
+      "@id": window.location.href
+    }
+  };
+
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [{
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Ana Səhifə",
+      "item": window.location.origin
+    }, {
+      "@type": "ListItem",
+      "position": 2,
+      "name": post.categories?.name_az || "Blog",
+      "item": `${window.location.origin}/?category=${post.categories?.slug}`
+    }, {
+      "@type": "ListItem",
+      "position": 3,
+      "name": post.title_az
+    }]
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300 pb-20">
       <SEO 
@@ -62,6 +116,10 @@ const PostDetail = () => {
         image={post.thumbnail_url || undefined}
         slug={`post/${post.slug}`}
         type="article"
+        publishedTime={post.published_at}
+        modifiedTime={post.updated_at}
+        schema={[articleSchema, breadcrumbSchema]}
+        favicon={siteSettings?.favicon_url || undefined}
       />
 
       <Navbar />

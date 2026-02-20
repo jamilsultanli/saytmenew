@@ -59,11 +59,30 @@ const Index = () => {
     return matchesCategory && matchesSearch;
   });
 
+  // Schema Markup for WebSite
+  const schemaMarkup = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": settings?.site_name || "Sayt.me",
+    "url": window.location.origin,
+    "description": settings?.site_description || "Marketinq nümunələri və strategiyaları",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": {
+        "@type": "EntryPoint",
+        "urlTemplate": `${window.location.origin}/?q={search_term_string}`
+      },
+      "query-input": "required name=search_term_string"
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
       <SEO 
         title={settings?.site_name || "Sayt.me"} 
         description={settings?.site_description || "Marketinq nümunələri və strategiyaları"} 
+        schema={schemaMarkup}
+        favicon={settings?.favicon_url || undefined}
       />
       
       <Navbar onSearchChange={setSearchQuery} searchValue={searchQuery} />
