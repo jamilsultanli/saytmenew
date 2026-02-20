@@ -8,22 +8,26 @@ export const useSiteSettings = () => {
   return useQuery({
     queryKey: ['siteSettings'],
     queryFn: async () => {
-      // Ən son yenilənən sətri götürürük
+      // Birbaşa bütün məlumatları çəkirik, sıralama olmadan
       const { data, error } = await supabase
         .from('site_settings')
         .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
 
       if (error) {
         console.error("Site Settings Fetch Error:", error);
+        throw error;
+      }
+
+      // Əgər data boşdursa null qaytar
+      if (!data || data.length === 0) {
         return null;
       }
 
-      return data as Settings;
+      // İlk sətri qaytar
+      return data[0] as Settings;
     },
-    staleTime: 1000 * 60 * 5, // 5 dəqiqə cache
-    retry: 2,
+    staleTime: 0, // Keşləməni söndürürük
+    refetchOnWindowFocus: true,
   });
 };

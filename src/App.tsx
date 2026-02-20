@@ -17,6 +17,7 @@ const Login = lazy(() => import("./pages/Login"));
 const Admin = lazy(() => import("./pages/Admin"));
 const PostDetail = lazy(() => import("./pages/PostDetail"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Debug = lazy(() => import("./pages/Debug")); // New Debug Page
 
 // Create a client
 const queryClient = new QueryClient({
@@ -53,6 +54,7 @@ const App = () => (
                   <Route path="/post/:slug" element={<PostDetail />} />
                   <Route path="/login" element={<Login />} />
                   <Route path="/admin" element={<Admin />} />
+                  <Route path="/debug" element={<Debug />} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
