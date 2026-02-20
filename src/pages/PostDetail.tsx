@@ -141,7 +141,7 @@ const PostDetail = () => {
               </span>
            </div>
 
-           <h1 className="text-2xl md:text-5xl lg:text-6xl font-black tracking-tight leading-[1.2] mb-8 text-foreground text-balance break-words">
+           <h1 className="text-xl md:text-3xl lg:text-4xl font-bold tracking-tight leading-tight mb-8 text-foreground text-balance break-words">
              {post.title_az}
            </h1>
 
