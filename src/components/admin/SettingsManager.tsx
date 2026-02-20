@@ -24,7 +24,15 @@ export const SettingsManager = () => {
     const { data: settings, isLoading } = useQuery({
       queryKey: ['admin-settings'],
       queryFn: async () => {
-        const { data } = await supabase.from('site_settings').select('*').order('updated_at', { ascending: false }).limit(1).maybeSingle();
+        // Ən dolu və ən son məlumatı gətir
+        const { data } = await supabase
+          .from('site_settings')
+          .select('*')
+          .not('site_name', 'is', null) // Boş adları ignor et
+          .order('id', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+          
         return data as SettingsType;
       }
     });
@@ -58,7 +66,6 @@ export const SettingsManager = () => {
         await seedDatabase();
         queryClient.invalidateQueries({ queryKey: ['admin-settings'] });
         queryClient.invalidateQueries({ queryKey: ['siteSettings'] });
-        // Force reload to ensure everything syncs up
         window.location.reload();
       } catch (e) {
         // Error handled in seed function
@@ -105,6 +112,8 @@ export const SettingsManager = () => {
         };
 
         let targetId = settings?.id;
+        
+        // Əgər ID yoxdursa, yenə də ən sonuncunu tapmağa çalışaq
         if (!targetId) {
              const { data } = await supabase.from('site_settings').select('id').limit(1).maybeSingle();
              if (data) targetId = data.id;
@@ -120,7 +129,7 @@ export const SettingsManager = () => {
       },
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['admin-settings'] });
-        queryClient.invalidateQueries({ queryKey: ['siteSettings'] }); // Invalidate global settings too
+        queryClient.invalidateQueries({ queryKey: ['siteSettings'] }); 
         toast.success("Ayarlar yadda saxlanıldı!");
         setLogoFile(null); setFavFile(null); setAuthorFile(null);
       },
