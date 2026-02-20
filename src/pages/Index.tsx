@@ -56,16 +56,16 @@ const Index = () => {
       <Navbar />
       
       <main className="max-w-7xl mx-auto px-4 md:px-6 pt-32 pb-20">
-        <FilterBar activeCategory={activeCategory} onCategoryChange={setActiveCategory} />
+        <FilterBar />
         
         {loading ? (
           <div className="flex justify-center items-center h-64">
             <Loader2 className="w-8 h-8 text-cyan-500 animate-spin" />
           </div>
-        ) : filteredPosts.length === 0 ? (
+        ) : posts.length === 0 ? (
           <div className="text-center py-20">
-            <h2 className="text-2xl font-bold text-white mb-4">Bu kateqoriyada məqalə yoxdur</h2>
-            <p className="text-gray-400">Tezliklə yeni məqalələr əlavə ediləcək.</p>
+            <h2 className="text-2xl font-bold text-white mb-4">Hələlik heç bir məqalə yoxdur</h2>
+            <p className="text-gray-400">Zəhmət olmasa Supabase bazasına məlumat əlavə edin.</p>
           </div>
         ) : (
           /* Bento Grid */
