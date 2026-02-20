@@ -73,7 +73,7 @@ const PostDetail = () => {
        .select(`*, categories:category_id (*)`)
        .eq('category_id', categoryId)
        .neq('id', currentPostId)
-       .limit(3); // 3 related posts looks better in grid
+       .limit(3); 
      
      if (data) setRelatedPosts(data as unknown as Post[]);
   };
@@ -109,7 +109,7 @@ const PostDetail = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors duration-300 pb-32">
+    <div className="min-h-screen bg-background text-foreground transition-colors duration-300 pb-32 overflow-x-hidden">
       <SEO 
         title={post.seo_title || post.title_az}
         description={post.seo_description || ""}
@@ -125,9 +125,7 @@ const PostDetail = () => {
       <Navbar />
       <FloatingAbout />
 
-      {/* Progress Bar could be added here later */}
-
-      <main className="pt-32">
+      <main className="pt-32 w-full">
         {/* Article Header */}
         <div className="max-w-3xl mx-auto px-6 text-center mb-10 animate-in fade-in slide-in-from-bottom-4 duration-700">
            <Link to="/" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary transition-colors mb-8 group">
@@ -135,7 +133,7 @@ const PostDetail = () => {
               Ana Səhifə
            </Link>
 
-           <div className="flex items-center justify-center gap-3 mb-6">
+           <div className="flex items-center justify-center gap-3 mb-6 flex-wrap">
               <span className={`px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase bg-primary/10 text-primary`}>
                 {post.categories?.name_az || 'Blog'}
               </span>
@@ -144,11 +142,11 @@ const PostDetail = () => {
               </span>
            </div>
 
-           <h1 className="text-3xl md:text-5xl lg:text-6xl font-black tracking-tight leading-[1.15] mb-8 text-foreground text-balance">
+           <h1 className="text-2xl md:text-5xl lg:text-6xl font-black tracking-tight leading-[1.2] mb-8 text-foreground text-balance break-words">
              {post.title_az}
            </h1>
 
-           <div className="flex items-center justify-center gap-4 text-sm text-muted-foreground border-t border-b border-border/50 py-4 w-fit mx-auto px-6">
+           <div className="flex flex-wrap items-center justify-center gap-4 text-sm text-muted-foreground border-t border-b border-border/50 py-4 w-fit mx-auto px-6">
               <div className="flex items-center gap-2">
                  <Avatar className="w-8 h-8 border border-border">
                     <AvatarImage src={siteSettings?.author_image || ""} />
@@ -156,7 +154,7 @@ const PostDetail = () => {
                  </Avatar>
                  <span className="font-medium text-foreground">{siteSettings?.author_name || "Müəllif"}</span>
               </div>
-              <span className="text-border mx-2">•</span>
+              <span className="text-border mx-2 hidden sm:inline">•</span>
               <div className="flex items-center gap-2">
                  <Calendar className="w-4 h-4" />
                  {post.published_at && format(new Date(post.published_at), "d MMMM yyyy", { locale: az })}
@@ -167,7 +165,7 @@ const PostDetail = () => {
         {/* Featured Image - Wide but not full screen */}
         {post.thumbnail_url && (
           <div className="max-w-5xl mx-auto px-4 md:px-6 mb-16 animate-in zoom-in-95 duration-700 delay-100">
-             <div className="relative aspect-[21/9] md:aspect-[2/1] rounded-3xl overflow-hidden shadow-2xl border border-border/50">
+             <div className="relative aspect-[16/9] md:aspect-[21/9] rounded-3xl overflow-hidden shadow-2xl border border-border/50">
                 <img 
                   src={post.thumbnail_url} 
                   alt={post.title_az} 
@@ -178,18 +176,18 @@ const PostDetail = () => {
         )}
 
         {/* Article Content */}
-        <div className="max-w-3xl mx-auto px-6">
+        <div className="max-w-3xl mx-auto px-6 w-full">
           <article className="
-            prose prose-lg md:prose-xl dark:prose-invert max-w-none
+            prose prose-lg md:prose-xl dark:prose-invert max-w-none w-full break-words
             prose-p:text-muted-foreground prose-p:leading-8 prose-p:font-normal
-            prose-headings:text-foreground prose-headings:font-bold prose-headings:tracking-tight prose-headings:mt-12 prose-headings:mb-6
-            prose-h2:text-3xl prose-h3:text-2xl
-            prose-a:text-primary prose-a:font-medium prose-a:underline prose-a:underline-offset-4 hover:prose-a:text-primary/80
+            prose-headings:text-foreground prose-headings:font-bold prose-headings:tracking-tight prose-headings:mt-12 prose-headings:mb-6 prose-headings:break-words
+            prose-h2:text-2xl md:prose-h2:text-3xl prose-h3:text-xl md:prose-h3:text-2xl
+            prose-a:text-primary prose-a:font-medium prose-a:underline prose-a:underline-offset-4 hover:prose-a:text-primary/80 prose-a:break-all
             prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:text-foreground prose-blockquote:font-medium prose-blockquote:bg-muted/20 prose-blockquote:py-2 prose-blockquote:rounded-r-lg
-            prose-img:rounded-2xl prose-img:shadow-lg prose-img:my-10 prose-img:border prose-img:border-border
+            prose-img:rounded-2xl prose-img:shadow-lg prose-img:my-10 prose-img:border prose-img:border-border prose-img:w-full prose-img:h-auto
             prose-li:text-muted-foreground prose-li:marker:text-primary prose-li:leading-7
             prose-strong:text-foreground prose-strong:font-bold
-            prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-sm prose-code:before:content-[''] prose-code:after:content-['']
+            prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded-md prose-code:font-mono prose-code:text-sm prose-code:before:content-[''] prose-code:after:content-[''] prose-code:break-all
             [&_p]:mb-6 [&_ul]:mb-6 [&_ol]:mb-6
             text-left
           ">
