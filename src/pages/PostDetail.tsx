@@ -33,34 +33,41 @@ const PostDetail = () => {
   useEffect(() => {
     if (slug) {
       window.scrollTo(0, 0); 
-      fetchPost(slug);
+      fetchData(slug);
     }
-    fetchSettings();
   }, [slug]);
 
-  const fetchSettings = async () => {
-    const { data } = await supabase.from('site_settings').select('favicon_url, author_name, author_image').single();
-    if (data) setSiteSettings(data);
-  };
-
-  const fetchPost = async (slug: string) => {
+  const fetchData = async (slug: string) => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('posts')
-        .select(`*, categories:category_id (*)`)
-        .eq('slug', slug)
-        .single();
+      // Fetch settings and post in parallel
+      const [settingsResult, postResult] = await Promise.all([
+        supabase
+          .from('site_settings')
+          .select('favicon_url, author_name, author_image')
+          .single(),
+        
+        supabase
+          .from('posts')
+          .select(`*, categories:category_id (*)`)
+          .eq('slug', slug)
+          .single()
+      ]);
 
-      if (error) throw error;
+      if (settingsResult.data) {
+        setSiteSettings(settingsResult.data);
+      }
+
+      if (postResult.error) throw postResult.error;
       
-      if (data) {
-        const currentPost = data as unknown as Post;
+      if (postResult.data) {
+        const currentPost = postResult.data as unknown as Post;
         setPost(currentPost);
+        // We have to wait for the post to get the category_id
         fetchRelatedPosts(currentPost.category_id, currentPost.id);
       }
     } catch (error) {
-      console.error('Error fetching post:', error);
+      console.error('Error fetching data:', error);
       navigate('/404');
     } finally {
       setLoading(false);

@@ -9,6 +9,7 @@ import { getIconForCategory } from "@/utils/icon-mapping";
 import { Loader2 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { SEO } from "@/components/SEO";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Post = Database['public']['Tables']['posts']['Row'] & {
   categories: Database['public']['Tables']['categories']['Row']
@@ -32,31 +33,29 @@ const Index = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // 1. Fetch Posts
-        const { data: postsData } = await supabase
-          .from('posts')
-          .select(`*, categories:category_id (*)`)
-          .order('published_at', { ascending: false });
-        
-        if (postsData) setPosts(postsData as unknown as Post[]);
+        // Execute all requests in parallel
+        const [postsResult, settingsResult, categoriesResult] = await Promise.all([
+          supabase
+            .from('posts')
+            .select(`*, categories:category_id (*)`)
+            .order('published_at', { ascending: false }),
+          
+          supabase
+            .from('site_settings')
+            .select('*')
+            .order('updated_at', { ascending: false })
+            .limit(1)
+            .maybeSingle(),
 
-        // 2. Fetch Settings
-        const { data: settingsData } = await supabase
-          .from('site_settings')
-          .select('*')
-          .order('updated_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          supabase
+            .from('categories')
+            .select('*')
+            .order('name_az')
+        ]);
         
-        if (settingsData) setSettings(settingsData);
-
-        // 3. Fetch Categories
-        const { data: catData } = await supabase
-          .from('categories')
-          .select('*')
-          .order('name_az');
-        
-        if (catData) setCategories(catData);
+        if (postsResult.data) setPosts(postsResult.data as unknown as Post[]);
+        if (settingsResult.data) setSettings(settingsResult.data);
+        if (categoriesResult.data) setCategories(categoriesResult.data);
 
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -125,30 +124,55 @@ const Index = () => {
       <Navbar onSearchChange={setSearchQuery} searchValue={searchQuery} />
       
       <main className="max-w-7xl mx-auto px-4 md:px-6 pt-32 pb-20">
-        <div className="mb-12 text-center space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-           <h1 className="text-4xl md:text-6xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60 pb-2 capitalize">
-             {activeCategory === 'all' 
-               ? (settings?.hero_title || settings?.site_name || "Marketinq Nümunələri")
-               : activeCategoryData?.name_az || activeCategory
-             }
-           </h1>
-           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-             {activeCategory === 'all'
-                ? (settings?.hero_description || settings?.site_description || "Real strategiyalar, uğur hekayələri və brendinq dərsləri.")
-                : `${activeCategoryData?.name_az} haqqında ən faydalı məqalələr və analizlər.`
-             }
-           </p>
+        <div className="mb-12 text-center space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700 min-h-[120px]">
+           {loading ? (
+             <div className="flex flex-col items-center gap-4">
+               <Skeleton className="h-12 w-3/4 max-w-lg rounded-lg" />
+               <Skeleton className="h-6 w-1/2 max-w-md rounded-lg" />
+             </div>
+           ) : (
+             <>
+               <h1 className="text-4xl md:text-6xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60 pb-2 capitalize">
+                 {activeCategory === 'all' 
+                   ? (settings?.hero_title || settings?.site_name || "Marketinq Nümunələri")
+                   : activeCategoryData?.name_az || activeCategory
+                 }
+               </h1>
+               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+                 {activeCategory === 'all'
+                    ? (settings?.hero_description || settings?.site_description || "Real strategiyalar, uğur hekayələri və brendinq dərsləri.")
+                    : `${activeCategoryData?.name_az} haqqında ən faydalı məqalələr və analizlər.`
+                 }
+               </p>
+             </>
+           )}
         </div>
 
-        <FilterBar 
-          activeCategory={activeCategory} 
-          onCategoryChange={handleCategoryChange} 
-          categories={categories}
-        />
+        {/* Filter Bar with CLS protection */}
+        <div className="min-h-[60px] mb-10">
+          {loading ? (
+            <div className="flex justify-center gap-3">
+               <Skeleton className="h-10 w-24 rounded-xl" />
+               <Skeleton className="h-10 w-24 rounded-xl" />
+               <Skeleton className="h-10 w-24 rounded-xl" />
+               <Skeleton className="h-10 w-24 rounded-xl" />
+            </div>
+          ) : (
+            <FilterBar 
+              activeCategory={activeCategory} 
+              onCategoryChange={handleCategoryChange} 
+              categories={categories}
+            />
+          )}
+        </div>
         
         {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          /* Skeleton Grid */
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 auto-rows-[300px]">
+             <Skeleton className="md:col-span-2 md:row-span-2 rounded-3xl" />
+             <Skeleton className="md:col-span-1 md:row-span-1 rounded-3xl" />
+             <Skeleton className="md:col-span-1 md:row-span-1 rounded-3xl" />
+             <Skeleton className="md:col-span-2 md:row-span-1 rounded-3xl" />
           </div>
         ) : filteredPosts.length === 0 ? (
           <div className="text-center py-20 border border-dashed border-border rounded-3xl bg-muted/20 animate-in zoom-in-95 duration-300">
