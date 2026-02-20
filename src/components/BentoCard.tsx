@@ -1,5 +1,6 @@
 import { cn } from "@/lib/utils";
 import { Clock } from "lucide-react";
+import { optimizeImage, generateSrcSet } from "@/utils/image-optimizer";
 
 interface BentoCardProps {
   title: string;
@@ -10,6 +11,7 @@ interface BentoCardProps {
   size?: "hero" | "square" | "wide" | "standard";
   colorTheme?: "blue" | "pink" | "yellow";
   icon?: React.ReactNode;
+  priority?: boolean; // New prop for LCP optimization
 }
 
 export const BentoCard = ({
@@ -21,18 +23,19 @@ export const BentoCard = ({
   size = "standard",
   colorTheme = "blue",
   icon,
+  priority = false,
 }: BentoCardProps) => {
   
-  // Theme-based badge colors
-  const getBadgeColor = () => {
-    return "bg-secondary text-secondary-foreground border-border/50";
-  };
+  // Determine image sizes based on card size
+  // These are approximate widths for responsive loading
+  const width = size === "hero" ? 800 : size === "wide" ? 600 : 400;
+  const height = size === "hero" ? 600 : size === "wide" ? 400 : 400;
 
   return (
     <div
       className={cn(
         "group relative overflow-hidden rounded-3xl cursor-pointer h-full border border-border shadow-sm transition-all duration-500 hover:shadow-xl",
-        "bg-card text-card-foreground", // Default theme colors
+        "bg-card text-card-foreground", 
         className
       )}
     >
@@ -41,9 +44,15 @@ export const BentoCard = ({
         {image ? (
           <>
             <img
-              src={image}
+              src={optimizeImage(image, width, height)}
+              srcSet={generateSrcSet(image, [400, 600, 800, 1200])}
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               alt={title}
               className="w-full h-full object-cover transition-opacity duration-500"
+              loading={priority ? "eager" : "lazy"}
+              {...(priority ? { fetchPriority: "high" } : {})}
+              width={width}
+              height={height}
             />
             {/* Gradient Overlay for Text Readability */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-80 group-hover:opacity-70 transition-opacity" />
@@ -66,7 +75,7 @@ export const BentoCard = ({
 
         <div className={cn("space-y-3 transition-transform duration-300 group-hover:-translate-y-1", size === "square" && "text-center")}>
           <h3 className={cn("font-bold leading-tight", 
-            image ? "text-white" : "text-card-foreground", // If image exists, text must be white (on dark overlay). If no image, theme color.
+            image ? "text-white" : "text-card-foreground",
             size === "hero" ? "text-3xl md:text-4xl max-w-lg" : 
             size === "square" ? "text-lg" : 
             "text-xl"

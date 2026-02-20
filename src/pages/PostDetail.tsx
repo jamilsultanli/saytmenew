@@ -12,6 +12,7 @@ import { SEO } from "@/components/SEO";
 import { toast } from "sonner";
 import { BentoCard } from "@/components/BentoCard";
 import { getIconForCategory } from "@/utils/icon-mapping";
+import { optimizeImage, generateSrcSet } from "@/utils/image-optimizer";
 
 type Post = Database['public']['Tables']['posts']['Row'] & {
   categories: Database['public']['Tables']['categories']['Row']
@@ -158,9 +159,15 @@ const PostDetail = () => {
           <div className="max-w-5xl mx-auto px-4 md:px-6 mb-16 animate-in zoom-in-95 duration-700 delay-100">
              <div className="relative aspect-[16/9] md:aspect-[21/9] rounded-3xl overflow-hidden shadow-2xl border border-border/50">
                 <img 
-                  src={post.thumbnail_url} 
+                  src={optimizeImage(post.thumbnail_url, 1200)}
+                  srcSet={generateSrcSet(post.thumbnail_url, [600, 800, 1200, 1600])}
+                  sizes="(max-width: 768px) 100vw, 80vw"
                   alt={post.title_az} 
                   className="w-full h-full object-cover"
+                  fetchPriority="high"
+                  loading="eager"
+                  width={1200}
+                  height={675} // Approximate 16:9 aspect ratio
                 />
              </div>
           </div>
@@ -227,6 +234,7 @@ const PostDetail = () => {
                          size="standard" // Force standard size for consistency in footer
                          icon={related.card_size === 'square' ? getIconForCategory(related.categories?.slug || '') : undefined}
                          className="h-[340px] shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300"
+                         priority={false} // Related posts are below fold
                        />
                     </Link>
                  ))}

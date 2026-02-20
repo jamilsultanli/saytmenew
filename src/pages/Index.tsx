@@ -119,7 +119,6 @@ const Index = () => {
         description={pageDescription} 
         schema={schemaMarkup}
         favicon={settings?.favicon_url || undefined}
-        // If specific category is selected, we might want to set canonical to the category URL
         slug={activeCategory !== 'all' ? `?category=${activeCategory}` : undefined}
       />
       
@@ -173,7 +172,7 @@ const Index = () => {
         ) : (
           /* Bento Grid */
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 auto-rows-[300px] animate-in fade-in duration-500">
-            {filteredPosts.map((post) => (
+            {filteredPosts.map((post, index) => (
               <Link 
                 to={`/post/${post.slug}`}
                 key={post.id}
@@ -192,6 +191,7 @@ const Index = () => {
                   image={post.thumbnail_url}
                   icon={post.card_size === 'square' ? getIconForCategory(post.categories?.slug || '') : undefined}
                   className="h-full"
+                  priority={index < 2} // Prioritize the first two images for LCP
                 />
               </Link>
             ))}

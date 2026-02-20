@@ -10,6 +10,7 @@ import {
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
+import { optimizeImage } from "@/utils/image-optimizer";
 
 type Settings = Database['public']['Tables']['site_settings']['Row'];
 
@@ -55,7 +56,13 @@ export const FloatingAbout = () => {
             <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-primary to-primary/50 p-[1px]">
               <div className="w-full h-full rounded-full bg-background flex items-center justify-center overflow-hidden">
                 {settings?.author_image ? (
-                  <img src={settings.author_image} alt="Author" className="w-full h-full object-cover" />
+                  <img 
+                    src={optimizeImage(settings.author_image, 100, 100)} 
+                    alt="Author" 
+                    className="w-full h-full object-cover" 
+                    width={36}
+                    height={36}
+                  />
                 ) : (
                   <User className="w-5 h-5 text-foreground" />
                 )}
@@ -81,7 +88,13 @@ export const FloatingAbout = () => {
             <div className="flex items-start gap-4">
               <div className="min-w-12 h-12 w-12 rounded-full bg-muted flex items-center justify-center border border-border overflow-hidden shrink-0">
                 {settings?.author_image ? (
-                   <img src={settings.author_image} alt="Author" className="w-full h-full object-cover" />
+                   <img 
+                     src={optimizeImage(settings.author_image, 100, 100)} 
+                     alt="Author" 
+                     className="w-full h-full object-cover"
+                     width={48}
+                     height={48}
+                   />
                 ) : (
                    <User className="w-6 h-6 text-primary" />
                 )}

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ModeToggle } from "./mode-toggle";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { optimizeImage } from "@/utils/image-optimizer";
 
 interface NavbarProps {
   onSearchChange?: (value: string) => void;
@@ -50,10 +51,12 @@ export const Navbar = ({ onSearchChange, searchValue }: NavbarProps) => {
         <Link to="/" className="flex items-center gap-2 group cursor-pointer">
           {logoUrl && !imageError ? (
              <img 
-               src={logoUrl} 
+               src={optimizeImage(logoUrl, 100, 100)} 
                alt={siteName} 
                className="h-10 w-auto object-contain transition-transform group-hover:scale-105" 
                onError={() => setImageError(true)}
+               width={40}
+               height={40}
              />
           ) : (
             // Fallback Logo
