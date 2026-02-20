@@ -1,6 +1,4 @@
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 
 type Category = Database['public']['Tables']['categories']['Row'];
@@ -8,20 +6,10 @@ type Category = Database['public']['Tables']['categories']['Row'];
 interface FilterBarProps {
   activeCategory: string;
   onCategoryChange: (slug: string) => void;
+  categories: Category[];
 }
 
-export const FilterBar = ({ activeCategory, onCategoryChange }: FilterBarProps) => {
-  const [categories, setCategories] = useState<Category[]>([]);
-
-  useEffect(() => {
-    fetchCategories();
-  }, []);
-
-  const fetchCategories = async () => {
-    const { data } = await supabase.from('categories').select('*').order('name_az');
-    if (data) setCategories(data);
-  };
-
+export const FilterBar = ({ activeCategory, onCategoryChange, categories }: FilterBarProps) => {
   return (
     <div className="w-full flex justify-center mb-10 px-4">
       <div className="flex flex-wrap justify-center gap-3 max-w-4xl mx-auto">

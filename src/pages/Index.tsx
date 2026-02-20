@@ -7,7 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getIconForCategory } from "@/utils/icon-mapping";
 import { Loader2 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { SEO } from "@/components/SEO";
 
 type Post = Database['public']['Tables']['posts']['Row'] & {
@@ -15,19 +15,24 @@ type Post = Database['public']['Tables']['posts']['Row'] & {
 };
 
 type SiteSettings = Database['public']['Tables']['site_settings']['Row'];
+type Category = Database['public']['Tables']['categories']['Row'];
 
 const Index = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [posts, setPosts] = useState<Post[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [settings, setSettings] = useState<SiteSettings | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeCategory, setActiveCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Get active category from URL or default to "all"
+  const activeCategory = searchParams.get("category") || "all";
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch Posts
+        // 1. Fetch Posts
         const { data: postsData } = await supabase
           .from('posts')
           .select(`*, categories:category_id (*)`)
@@ -35,7 +40,7 @@ const Index = () => {
         
         if (postsData) setPosts(postsData as unknown as Post[]);
 
-        // Fetch Settings - Using updated_at to match Admin/Navbar logic
+        // 2. Fetch Settings
         const { data: settingsData } = await supabase
           .from('site_settings')
           .select('*')
@@ -44,6 +49,15 @@ const Index = () => {
           .maybeSingle();
         
         if (settingsData) setSettings(settingsData);
+
+        // 3. Fetch Categories
+        const { data: catData } = await supabase
+          .from('categories')
+          .select('*')
+          .order('name_az');
+        
+        if (catData) setCategories(catData);
+
       } catch (error) {
         console.error('Error fetching data:', error);
       } finally {
@@ -54,12 +68,32 @@ const Index = () => {
     fetchData();
   }, []);
 
+  const handleCategoryChange = (slug: string) => {
+    if (slug === 'all') {
+      searchParams.delete("category");
+    } else {
+      searchParams.set("category", slug);
+    }
+    setSearchParams(searchParams);
+  };
+
   const filteredPosts = posts.filter(post => {
     const matchesCategory = activeCategory === "all" || post.categories?.slug === activeCategory;
     const title = post.title_az || "";
     const matchesSearch = title.toLowerCase().includes((searchQuery || "").toLowerCase());
     return matchesCategory && matchesSearch;
   });
+
+  // --- Dynamic SEO Logic ---
+  const activeCategoryData = categories.find(c => c.slug === activeCategory);
+  
+  const pageTitle = activeCategory === 'all' 
+    ? (settings?.hero_title || settings?.site_name || "Sayt.me")
+    : `${activeCategoryData?.name_az || 'Marketinq'} Nümunələri və Strategiyaları`;
+
+  const pageDescription = activeCategory === 'all'
+    ? (settings?.site_description || "Marketinq nümunələri və strategiyaları")
+    : `${activeCategoryData?.name_az} sahəsində ən son tendensiyalar, real biznes nümunələri, brendinq strategiyaları və analizlər.`;
 
   // Schema Markup for WebSite
   const schemaMarkup = {
@@ -81,25 +115,37 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors duration-300">
       <SEO 
-        title={settings?.site_name || "Sayt.me"} 
-        description={settings?.site_description || "Marketinq nümunələri və strategiyaları"} 
+        title={pageTitle} 
+        description={pageDescription} 
         schema={schemaMarkup}
         favicon={settings?.favicon_url || undefined}
+        // If specific category is selected, we might want to set canonical to the category URL
+        slug={activeCategory !== 'all' ? `?category=${activeCategory}` : undefined}
       />
       
       <Navbar onSearchChange={setSearchQuery} searchValue={searchQuery} />
       
       <main className="max-w-7xl mx-auto px-4 md:px-6 pt-32 pb-20">
         <div className="mb-12 text-center space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
-           <h1 className="text-4xl md:text-6xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60 pb-2">
-             {settings?.hero_title || settings?.site_name || "Marketinq Nümunələri"}
+           <h1 className="text-4xl md:text-6xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary/60 pb-2 capitalize">
+             {activeCategory === 'all' 
+               ? (settings?.hero_title || settings?.site_name || "Marketinq Nümunələri")
+               : activeCategoryData?.name_az || activeCategory
+             }
            </h1>
            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-             {settings?.hero_description || settings?.site_description || "Real strategiyalar, uğur hekayələri və brendinq dərsləri."}
+             {activeCategory === 'all'
+                ? (settings?.hero_description || settings?.site_description || "Real strategiyalar, uğur hekayələri və brendinq dərsləri.")
+                : `${activeCategoryData?.name_az} haqqında ən faydalı məqalələr və analizlər.`
+             }
            </p>
         </div>
 
-        <FilterBar activeCategory={activeCategory} onCategoryChange={setActiveCategory} />
+        <FilterBar 
+          activeCategory={activeCategory} 
+          onCategoryChange={handleCategoryChange} 
+          categories={categories}
+        />
         
         {loading ? (
           <div className="flex justify-center items-center h-64">
@@ -113,8 +159,16 @@ const Index = () => {
             <p className="text-muted-foreground">
               {posts.length === 0 
                 ? "Admin panelindən məqalə əlavə edə bilərsiniz." 
-                : "Açar sözləri dəyişərək yenidən cəhd edin."}
+                : "Açar sözləri və ya kateqoriyanı dəyişərək yenidən cəhd edin."}
             </p>
+            {activeCategory !== 'all' && (
+              <button 
+                onClick={() => handleCategoryChange('all')}
+                className="mt-4 text-primary hover:underline font-medium"
+              >
+                Bütün yazılara bax
+              </button>
+            )}
           </div>
         ) : (
           /* Bento Grid */
