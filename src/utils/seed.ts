@@ -33,6 +33,9 @@ export const seedDatabase = async () => {
       if (catError.code === "42501") {
         throw new Error("İcazə rədd edildi (RLS Policy). Zəhmət olmasa Supabase SQL Editor-da RLS siyasətlərini yeniləyin.");
       }
+      if (catError.message.includes("Could not find") || catError.code === "42P01") {
+         throw new Error("Cədvəllər tapılmadı. Zəhmət olmasa əvvəlcə SQL kodunu işlədərək bazanı qurun.");
+      }
       throw new Error("Kateqoriya xətası: " + catError.message);
     }
 
@@ -128,7 +131,7 @@ export const seedDatabase = async () => {
     if (postError) {
       console.error("Post seed error details:", postError);
        if (postError.code === "42501") {
-        throw new Error("İcazə rədd edildi (RLS Policy). Zəhmət olmasa Supabase SQL Editor-da RLS siyasətlərini yeniləyin.");
+        throw new Error("İcazə rədd edildi (RLS Policy).");
       }
       throw new Error("Məqalə xətası: " + postError.message);
     }
@@ -138,6 +141,7 @@ export const seedDatabase = async () => {
   } catch (error: any) {
     console.error(error);
     toast.error(error.message || "Xəta baş verdi", { id: toastId });
-    return false;
+    // Important: Propagate the error so Admin component knows about it
+    throw error;
   }
 };

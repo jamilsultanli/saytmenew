@@ -215,15 +215,11 @@ const Admin = () => {
     setSeedError(null);
     
     try {
-      const success = await seedDatabase();
-      if (success) {
-        fetchCategories();
-        fetchPosts();
-        toast.success("Məlumatlar yükləndi! Səhifə yenilənir...");
-        setTimeout(() => window.location.reload(), 1500);
-      } else {
-        setSeedError("RLS İcazə xətası.");
-      }
+      await seedDatabase();
+      fetchCategories();
+      fetchPosts();
+      toast.success("Məlumatlar yükləndi! Səhifə yenilənir...");
+      setTimeout(() => window.location.reload(), 1500);
     } catch (error: any) {
       setSeedError(error.message);
     } finally {
@@ -266,9 +262,11 @@ const Admin = () => {
         {seedError && (
           <Alert variant="destructive" className="mb-6 border-red-500/50 bg-red-900/10 text-red-200">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>İcazə Xətası (RLS)</AlertTitle>
+            <AlertTitle>
+              {seedError.includes("Cədvəllər tapılmadı") ? "Verilənlər Bazası Boşdur" : "Xəta Baş Verdi"}
+            </AlertTitle>
             <AlertDescription className="flex flex-col gap-2">
-              <span>Məlumat bazası boşdur və ya kilidlidir. Aşağıdakı həll yolunu tətbiq edin: <b>Cədvəlləri tam sıfırlamaq.</b></span>
+              <span>{seedError}</span>
               <Button 
                 variant="outline" 
                 size="sm" 
