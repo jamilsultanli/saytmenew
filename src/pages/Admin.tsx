@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -18,16 +17,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Upload, Trash2, ExternalLink, Database as DbIcon, AlertCircle, Copy, Check, Info, RefreshCw, Settings, PenTool, LayoutTemplate, Image as ImageIcon } from "lucide-react";
+import { Loader2, Upload, Trash2, ExternalLink, Copy, Check, Info, Settings, PenTool, Image as ImageIcon, X } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
-import { seedDatabase } from "@/utils/seed";
 import { SEO } from "@/components/SEO";
 
 type Category = Database['public']['Tables']['categories']['Row'];
 type Post = Database['public']['Tables']['posts']['Row'];
 
-// SQL TO CREATE SITE SETTINGS IF MISSING (Updated with favicon)
-const SQL_FIX_SETTINGS = `
+// Complete SQL Setup: Tables + Storage
+const SQL_SETUP = `
+-- 1. Create Site Settings Table
 CREATE TABLE IF NOT EXISTS public.site_settings (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   site_name TEXT DEFAULT 'Sayt.me',
@@ -44,6 +43,16 @@ ALTER TABLE public.site_settings DISABLE ROW LEVEL SECURITY;
 INSERT INTO public.site_settings (site_name, site_description)
 SELECT 'Sayt.me', 'Mənim şəxsi bloqum'
 WHERE NOT EXISTS (SELECT 1 FROM public.site_settings);
+
+-- 2. Create Storage Bucket for Images
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('images', 'images', true)
+ON CONFLICT (id) DO NOTHING;
+
+-- 3. Storage Policies (Allow Public Read, Auth Upload)
+CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING ( bucket_id = 'images' );
+CREATE POLICY "Auth Upload" ON storage.objects FOR INSERT TO authenticated WITH CHECK ( bucket_id = 'images' );
+CREATE POLICY "Auth Delete" ON storage.objects FOR DELETE TO authenticated USING ( bucket_id = 'images' );
 `;
 
 const Admin = () => {
@@ -65,16 +74,23 @@ const Admin = () => {
   const [cardSize, setCardSize] = useState("standard");
   const [seoTitle, setSeoTitle] = useState("");
   const [seoDesc, setSeoDesc] = useState("");
+  
+  // Image Upload State
   const [file, setFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   // Settings Form State
   const [siteName, setSiteName] = useState("");
   const [siteDesc, setSiteDesc] = useState("");
   const [footerText, setFooterText] = useState("");
   const [settingsId, setSettingsId] = useState<string | null>(null);
+  
   const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [faviconFile, setFaviconFile] = useState<File | null>(null);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
   const [currentLogo, setCurrentLogo] = useState<string | null>(null);
+  
+  const [faviconFile, setFaviconFile] = useState<File | null>(null);
+  const [faviconPreview, setFaviconPreview] = useState<string | null>(null);
   const [currentFavicon, setCurrentFavicon] = useState<string | null>(null);
 
   // Error/Dialog State
@@ -129,14 +145,30 @@ const Admin = () => {
     setSlug(generateSlug(e.target.value));
   };
 
+  // Generic File Upload Handler
   const uploadFile = async (file: File) => {
     const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random()}.${fileExt}`;
-    const filePath = `${fileName}`;
-    const { error } = await supabase.storage.from('images').upload(filePath, file);
+    const uniqueId = crypto.randomUUID();
+    const fileName = `${uniqueId}.${fileExt}`;
+    
+    const { error } = await supabase.storage.from('images').upload(fileName, file);
     if (error) throw error;
-    const { data } = supabase.storage.from('images').getPublicUrl(filePath);
+    
+    const { data } = supabase.storage.from('images').getPublicUrl(fileName);
     return data.publicUrl;
+  };
+
+  // Image Preview Handler
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, setFileState: (f: File | null) => void, setPreviewState: (s: string | null) => void) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setFileState(selectedFile);
+      const objectUrl = URL.createObjectURL(selectedFile);
+      setPreviewState(objectUrl);
+    } else {
+      setFileState(null);
+      setPreviewState(null);
+    }
   };
 
   const handleBlogSubmit = async (e: React.FormEvent) => {
@@ -160,9 +192,18 @@ const Admin = () => {
         seo_description: seoDesc
       });
 
-      if (error) throw error;
+      if (error) {
+        if (error.code === "42P01" || error.message.includes("bucket")) {
+            setShowSqlDialog(true);
+            throw new Error("Zəhmət olmasa SQL kodunu işə salaraq bazanı qurun.");
+        }
+        throw error;
+      }
+
       toast.success("Məqalə yaradıldı!");
-      setTitle(""); setSlug(""); setContent(""); setFile(null); setSeoTitle(""); setSeoDesc("");
+      // Reset form
+      setTitle(""); setSlug(""); setContent(""); setReadTime(""); 
+      setFile(null); setImagePreview(null); setSeoTitle(""); setSeoDesc("");
       fetchPosts(); 
     } catch (error: any) {
       toast.error(error.message);
@@ -198,9 +239,14 @@ const Admin = () => {
       }
       toast.success("Ayarlar yeniləndi!");
       fetchSettings();
+      // Clear previews
+      setLogoPreview(null);
+      setFaviconPreview(null);
     } catch (error: any) {
-      toast.error("Xəta baş verdi. Baza qurulubmu?");
-      setShowSqlDialog(true);
+      toast.error(error.message);
+      if (error.message.includes("bucket") || error.code === "42P01") {
+          setShowSqlDialog(true);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -214,7 +260,7 @@ const Admin = () => {
   };
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(SQL_FIX_SETTINGS);
+    navigator.clipboard.writeText(SQL_SETUP);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
     toast.success("Kopyalandı!");
@@ -300,7 +346,7 @@ const Admin = () => {
                       </div>
                     </div>
 
-                    <div className="flex gap-4">
+                    <div className="flex gap-4 items-end">
                       <div className="grid gap-2 w-1/2">
                         <Label>Ölçü</Label>
                         <Select onValueChange={setCardSize} defaultValue="standard">
@@ -313,8 +359,27 @@ const Admin = () => {
                         </Select>
                       </div>
                       <div className="grid gap-2 w-1/2">
-                        <Label>Şəkil</Label>
-                        <Input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                        <Label>Məqalə Şəkli</Label>
+                        <div className="relative">
+                           <Input 
+                             type="file" 
+                             accept="image/*"
+                             onChange={(e) => handleFileSelect(e, setFile, setImagePreview)} 
+                             className="cursor-pointer"
+                           />
+                           {imagePreview && (
+                             <div className="mt-2 relative rounded-lg overflow-hidden border border-border w-full h-32 group">
+                               <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                               <button 
+                                 type="button" 
+                                 onClick={() => { setFile(null); setImagePreview(null); }}
+                                 className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                               >
+                                 <X className="w-4 h-4" />
+                               </button>
+                             </div>
+                           )}
+                        </div>
                       </div>
                     </div>
 
@@ -356,7 +421,7 @@ const Admin = () => {
             <Card>
               <CardHeader>
                 <CardTitle>Sayt Ayarları</CardTitle>
-                <CardDescription>Brendinq və SEO məlumatlarını idarə edin.</CardDescription>
+                <CardDescription>Brendinq, Logo və SEO məlumatlarını idarə edin.</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSettingsSubmit} className="space-y-6">
@@ -374,15 +439,40 @@ const Admin = () => {
                      <div className="grid gap-2">
                         <Label>Logo</Label>
                         <div className="flex flex-col gap-2">
-                           {currentLogo && <img src={currentLogo} alt="Logo" className="h-10 w-auto object-contain border p-1 rounded" />}
-                           <Input type="file" accept="image/*" onChange={(e) => setLogoFile(e.target.files?.[0] || null)} />
+                           {/* Priority: Preview -> Current -> Placeholder */}
+                           {(logoPreview || currentLogo) ? (
+                             <div className="relative h-20 w-full border border-border rounded-lg flex items-center justify-center bg-muted/20">
+                               <img 
+                                 src={logoPreview || currentLogo || ""} 
+                                 alt="Logo" 
+                                 className="h-16 w-auto object-contain" 
+                               />
+                             </div>
+                           ) : (
+                             <div className="h-20 w-full border border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center text-muted-foreground">
+                               <ImageIcon className="w-6 h-6" />
+                             </div>
+                           )}
+                           <Input type="file" accept="image/*" onChange={(e) => handleFileSelect(e, setLogoFile, setLogoPreview)} />
                         </div>
                      </div>
                      <div className="grid gap-2">
                         <Label>Favicon</Label>
                          <div className="flex flex-col gap-2">
-                           {currentFavicon && <img src={currentFavicon} alt="Favicon" className="h-8 w-8 object-contain border p-1 rounded" />}
-                           <Input type="file" accept="image/*" onChange={(e) => setFaviconFile(e.target.files?.[0] || null)} />
+                           {(faviconPreview || currentFavicon) ? (
+                             <div className="relative h-20 w-full border border-border rounded-lg flex items-center justify-center bg-muted/20">
+                               <img 
+                                 src={faviconPreview || currentFavicon || ""} 
+                                 alt="Favicon" 
+                                 className="h-8 w-8 object-contain" 
+                               />
+                             </div>
+                           ) : (
+                             <div className="h-20 w-full border border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center text-muted-foreground">
+                               <ImageIcon className="w-6 h-6" />
+                             </div>
+                           )}
+                           <Input type="file" accept="image/*" onChange={(e) => handleFileSelect(e, setFaviconFile, setFaviconPreview)} />
                         </div>
                      </div>
                   </div>
@@ -399,9 +489,9 @@ const Admin = () => {
                 </form>
 
                 <div className="mt-8 p-4 bg-muted/30 rounded-lg text-xs text-muted-foreground">
-                  <p className="flex items-center gap-2 mb-2"><Info className="w-4 h-4" /> <strong>Qeyd:</strong> Xəta baş verərsə SQL:</p>
+                  <p className="flex items-center gap-2 mb-2"><Info className="w-4 h-4" /> <strong>Quraşdırma:</strong> Əgər Storage xətası alırsınızsa:</p>
                   <Button size="sm" variant="outline" onClick={() => setShowSqlDialog(true)} className="w-full">
-                    SQL Kodunu Göstər
+                    SQL Kodunu Göstər (Bazanı Qur)
                   </Button>
                 </div>
               </CardContent>
@@ -413,14 +503,16 @@ const Admin = () => {
         <Dialog open={showSqlDialog} onOpenChange={setShowSqlDialog}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Settings Cədvəlini Yarat</DialogTitle>
-              <DialogDescription>Bu kodu Supabase SQL Editor-da işlədin.</DialogDescription>
+              <DialogTitle>Məlumat Bazası və Storage Quraşdırılması</DialogTitle>
+              <DialogDescription>
+                Fayl yükləmək üçün bu SQL kodunu Supabase Dashboard-da işlədin.
+              </DialogDescription>
             </DialogHeader>
             <div className="relative mt-2">
-              <pre className="p-4 rounded bg-black/90 text-green-400 text-xs overflow-auto h-40">
-                {SQL_FIX_SETTINGS}
+              <pre className="p-4 rounded-lg bg-zinc-950 text-emerald-400 text-[10px] leading-relaxed overflow-auto h-60 border border-zinc-800 font-mono">
+                {SQL_SETUP}
               </pre>
-              <Button size="sm" className="absolute top-2 right-2" onClick={copyToClipboard}>
+              <Button size="icon" className="absolute top-3 right-3 h-6 w-6" onClick={copyToClipboard}>
                 {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
               </Button>
             </div>
