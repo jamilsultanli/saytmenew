@@ -1,10 +1,9 @@
-import { useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { FloatingAbout } from "@/components/FloatingAbout";
 import { Database } from "@/integrations/supabase/types";
-import { Clock, Calendar, ChevronLeft, Share2 } from "lucide-react";
+import { Clock, Calendar, ChevronLeft, Share2, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { az } from "date-fns/locale";
@@ -22,10 +21,6 @@ type Post = Database['public']['Tables']['posts']['Row'] & {
 const PostDetail = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [slug]);
 
   // Fetch Settings (Cached)
   const { data: siteSettings } = useQuery({

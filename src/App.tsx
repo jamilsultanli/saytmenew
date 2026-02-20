@@ -7,6 +7,7 @@ import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "@/components/theme-provider";
 import { GlobalScripts } from "@/components/GlobalScripts";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import ScrollToTop from "@/components/ScrollToTop";
 import { lazy, Suspense } from "react";
 import { Loader2 } from "lucide-react";
 
@@ -45,6 +46,7 @@ const App = () => (
           <Sonner />
           <ErrorBoundary>
             <BrowserRouter>
+              <ScrollToTop />
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   <Route path="/" element={<Index />} />
