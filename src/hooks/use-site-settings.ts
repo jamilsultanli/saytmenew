@@ -6,28 +6,35 @@ type Settings = Database['public']['Tables']['site_settings']['Row'];
 
 export const useSiteSettings = () => {
   return useQuery({
-    queryKey: ['siteSettings'],
+    // Cache-i məcburi yeniləmək üçün versiyanı dəyişdim 'v2'
+    queryKey: ['siteSettings', 'v2'],
     queryFn: async () => {
-      // Birbaşa bütün məlumatları çəkirik, sıralama olmadan
+      console.log("Site settings yüklənir...");
+      
       const { data, error } = await supabase
         .from('site_settings')
         .select('*')
+        // Boş sətirləri (null) ignor et
+        .not('site_name', 'is', null)
+        // Ən son yaradılan və ya yenilənən məlumatı götür
+        .order('id', { ascending: false }) 
         .limit(1);
 
       if (error) {
-        console.error("Site Settings Fetch Error:", error);
+        console.error("Fetch Error:", error);
         throw error;
       }
 
-      // Əgər data boşdursa null qaytar
+      // Əgər heç nə tapılmasa null qaytar
       if (!data || data.length === 0) {
+        console.log("Məlumat tapılmadı (Array boşdur)");
         return null;
       }
 
-      // İlk sətri qaytar
+      console.log("Tapılan ayarlar:", data[0]);
       return data[0] as Settings;
     },
-    staleTime: 0, // Keşləməni söndürürük
+    staleTime: 0, 
     refetchOnWindowFocus: true,
   });
 };
