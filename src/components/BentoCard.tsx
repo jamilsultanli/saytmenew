@@ -55,7 +55,7 @@ export const BentoCard = ({
               height={height}
             />
             {/* Gradient Overlay for Text Readability */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-80 group-hover:opacity-70 transition-opacity" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
           </>
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-muted to-background" />
@@ -76,9 +76,9 @@ export const BentoCard = ({
         <div className={cn("space-y-3 transition-transform duration-300 group-hover:-translate-y-1", size === "square" && "text-center")}>
           <h3 className={cn("font-bold leading-tight", 
             image ? "text-white" : "text-card-foreground",
-            size === "hero" ? "text-3xl md:text-4xl max-w-lg" : 
-            size === "square" ? "text-lg" : 
-            "text-xl"
+            size === "hero" ? "text-2xl md:text-3xl max-w-lg" : 
+            size === "square" ? "text-base" : 
+            "text-lg"
           )}>
             {title}
           </h3>
