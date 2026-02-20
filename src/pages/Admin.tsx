@@ -196,7 +196,8 @@ const Admin = () => {
         
         if (formFile) {
            const fileExt = formFile.name.split('.').pop();
-           const fileName = `${Math.random()}.${fileExt}`;
+           const randomName = Math.random().toString(36).substring(7);
+           const fileName = `post-${Date.now()}-${randomName}.${fileExt}`;
            const { error: uploadError } = await supabase.storage.from('images').upload(fileName, formFile);
            if (uploadError) throw uploadError;
            const { data } = supabase.storage.from('images').getPublicUrl(fileName);
@@ -432,12 +433,16 @@ const Admin = () => {
         let logoUrl = settings?.logo_url;
         let favUrl = settings?.favicon_url;
 
-        // Upload Helper
+        // Upload Helper with Sanitization
         const upload = async (f: File) => {
-           const name = `asset-${Date.now()}-${f.name}`;
-           const { error } = await supabase.storage.from('images').upload(name, f);
+           // Safe filename generation
+           const fileExt = f.name.split('.').pop();
+           const randomName = Math.random().toString(36).substring(7);
+           const safeName = `asset-${Date.now()}-${randomName}.${fileExt}`;
+           
+           const { error } = await supabase.storage.from('images').upload(safeName, f);
            if (error) throw error;
-           const { data } = supabase.storage.from('images').getPublicUrl(name);
+           const { data } = supabase.storage.from('images').getPublicUrl(safeName);
            return data.publicUrl;
         };
 
