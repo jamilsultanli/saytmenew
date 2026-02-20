@@ -31,7 +31,9 @@ import {
   LineChart,
   Bot,
   FileCode,
-  User
+  User,
+  Mail,
+  Linkedin
 } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { SEO } from "@/components/SEO";
@@ -515,6 +517,10 @@ const Admin = () => {
     // New Fields
     const [authorName, setAuthorName] = useState(settings?.author_name || "");
     const [aboutText, setAboutText] = useState(settings?.about_text || "");
+    
+    // Social Links
+    const [email, setEmail] = useState("");
+    const [linkedin, setLinkedin] = useState("");
 
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [favFile, setFavFile] = useState<File | null>(null);
@@ -533,6 +539,11 @@ const Admin = () => {
             setGscCode(settings.google_search_console_code || "");
             setAuthorName(settings.author_name || "");
             setAboutText(settings.about_text || "");
+            
+            // Social Links parsing
+            const links = settings.social_links as any || {};
+            setEmail(links.email || "");
+            setLinkedin(links.linkedin || "");
         }
     }, [settings]);
 
@@ -572,7 +583,8 @@ const Admin = () => {
           google_search_console_code: gscCode || null,
           author_name: authorName,
           about_text: aboutText,
-          author_image: authorImgUrl
+          author_image: authorImgUrl,
+          social_links: { email, linkedin }
         };
 
         let targetId = settings?.id;
@@ -648,6 +660,16 @@ const Admin = () => {
                        <div className="grid gap-2">
                           <Label>Haqqında Mətni</Label>
                           <Textarea value={aboutText} onChange={(e) => setAboutText(e.target.value)} className="h-24" placeholder="Saytın məqsədi və ya özünüz haqqında qısa məlumat..." />
+                       </div>
+                       <div className="grid grid-cols-2 gap-2 pt-2">
+                          <div className="grid gap-2">
+                             <Label className="flex items-center gap-1"><Mail className="w-3 h-3" /> Email</Label>
+                             <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="example@mail.com" />
+                          </div>
+                          <div className="grid gap-2">
+                             <Label className="flex items-center gap-1"><Linkedin className="w-3 h-3" /> LinkedIn URL</Label>
+                             <Input value={linkedin} onChange={(e) => setLinkedin(e.target.value)} placeholder="https://linkedin.com/in/..." />
+                          </div>
                        </div>
                     </div>
                  </div>
@@ -741,7 +763,7 @@ const Admin = () => {
                  <CardTitle className="flex items-center gap-2"><Bot className="w-5 h-5 text-primary" /> Dinamik SEO Faylları</CardTitle>
                  <CardDescription>
                     Saytınızın axtarış sistemləri və AI botları tərəfindən oxunması üçün dinamik fayllar.
-                    Bu fayllar Supabase Edge Functions vasitəsilə avtomatik yaradılır.
+                    Bu fayllar Supabase Edge Function-lar vasitəsilə avtomatik yaradılır.
                  </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-6">
