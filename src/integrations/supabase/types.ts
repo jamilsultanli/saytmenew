@@ -9,6 +9,35 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
+      site_settings: {
+        Row: {
+          id: string
+          site_name: string
+          site_description: string | null
+          logo_url: string | null
+          footer_text: string | null
+          social_links: Json | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          site_name?: string
+          site_description?: string | null
+          logo_url?: string | null
+          footer_text?: string | null
+          social_links?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          site_name?: string
+          site_description?: string | null
+          logo_url?: string | null
+          footer_text?: string | null
+          social_links?: Json | null
+          updated_at?: string
+        }
+      }
       categories: {
         Row: {
           id: string

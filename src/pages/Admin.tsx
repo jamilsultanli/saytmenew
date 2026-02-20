@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -16,64 +18,31 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Upload, Trash2, ExternalLink, Database as DbIcon, AlertCircle, Copy, Check, Info, RefreshCw } from "lucide-react";
+import { Loader2, Upload, Trash2, ExternalLink, Database as DbIcon, AlertCircle, Copy, Check, Info, RefreshCw, Settings, PenTool, LayoutTemplate } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { seedDatabase } from "@/utils/seed";
+import { SEO } from "@/components/SEO";
 
 type Category = Database['public']['Tables']['categories']['Row'];
 type Post = Database['public']['Tables']['posts']['Row'];
 
-// NUCLEAR OPTION: Drop and Recreate tables without RLS
-const SQL_FIX_CODE = `-- BU KOD BÜTÜN CƏDVƏLLƏRİ SİLİB YENİDƏN YARADACAQ
--- RLS (Təhlükəsizlik) söndürülmüş halda olacaq
-
--- 1. Mövcud cədvəlləri sil (Təmizlik)
-DROP TABLE IF EXISTS public.posts;
-DROP TABLE IF EXISTS public.categories;
-
--- 2. Categories cədvəlini yarat
-CREATE TABLE public.categories (
+// SQL TO CREATE SITE SETTINGS IF MISSING
+const SQL_FIX_SETTINGS = `
+CREATE TABLE IF NOT EXISTS public.site_settings (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  name_az TEXT NOT NULL,
-  slug TEXT NOT NULL UNIQUE,
-  color_theme TEXT NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- 3. Posts cədvəlini yarat
-CREATE TABLE public.posts (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  title_az TEXT NOT NULL,
-  slug TEXT NOT NULL UNIQUE,
-  content_html TEXT NOT NULL,
-  thumbnail_url TEXT,
-  read_time_az TEXT,
-  category_id UUID REFERENCES public.categories(id) ON DELETE CASCADE,
-  card_size TEXT DEFAULT 'standard',
-  is_featured BOOLEAN DEFAULT false,
-  published_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  seo_title TEXT,
-  seo_description TEXT,
-  og_image_url TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  site_name TEXT DEFAULT 'Sayt.me',
+  site_description TEXT,
+  logo_url TEXT,
+  footer_text TEXT,
+  social_links JSONB,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 4. Təhlükəsizlik kilidlərini söndür (Yazmağa icazə ver)
-ALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.posts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.site_settings DISABLE ROW LEVEL SECURITY;
 
--- 5. Storage (Şəkillər üçün) buckets yarat
-INSERT INTO storage.buckets (id, name, public) 
-VALUES ('images', 'images', true)
-ON CONFLICT (id) DO NOTHING;
-
--- Storage icazələrini yenilə (Köhnələri silib yenisini yaradırıq ki, xəta olmasın)
-DROP POLICY IF EXISTS "Public Access" ON storage.objects;
-DROP POLICY IF EXISTS "Auth Upload" ON storage.objects;
-
-CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING ( bucket_id = 'images' ); 
-CREATE POLICY "Auth Upload" ON storage.objects FOR INSERT TO authenticated WITH CHECK ( bucket_id = 'images' );
+INSERT INTO public.site_settings (site_name, site_description)
+SELECT 'Sayt.me', 'Mənim şəxsi bloqum'
+WHERE NOT EXISTS (SELECT 1 FROM public.site_settings);
 `;
 
 const PROJECT_ID = "qnpoftjwfwzgxmuzqauc";
@@ -82,27 +51,38 @@ const Admin = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [seeding, setSeeding] = useState(false);
-  const [seedError, setSeedError] = useState<string | null>(null);
-  const [showSqlDialog, setShowSqlDialog] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState("blog");
   
+  // Data State
   const [categories, setCategories] = useState<Category[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   
-  // Form State
+  // Blog Form State
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [content, setContent] = useState("");
   const [readTime, setReadTime] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [cardSize, setCardSize] = useState("standard");
+  const [seoTitle, setSeoTitle] = useState("");
+  const [seoDesc, setSeoDesc] = useState("");
   const [file, setFile] = useState<File | null>(null);
+
+  // Settings Form State
+  const [siteName, setSiteName] = useState("");
+  const [siteDesc, setSiteDesc] = useState("");
+  const [footerText, setFooterText] = useState("");
+  const [settingsId, setSettingsId] = useState<string | null>(null);
+
+  // Error/Dialog State
+  const [showSqlDialog, setShowSqlDialog] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     checkUser();
     fetchCategories();
     fetchPosts();
+    fetchSettings();
   }, []);
 
   const checkUser = async () => {
@@ -114,22 +94,29 @@ const Admin = () => {
   };
 
   const fetchCategories = async () => {
-    const { data, error } = await supabase.from('categories').select('*');
-    if (error) console.error("Error fetching categories:", error);
+    const { data } = await supabase.from('categories').select('*');
     if (data) setCategories(data);
   };
 
   const fetchPosts = async () => {
-    const { data, error } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
-    if (error) console.error("Error fetching posts:", error);
+    const { data } = await supabase.from('posts').select('*').order('created_at', { ascending: false });
     if (data) setPosts(data);
   };
 
+  const fetchSettings = async () => {
+    const { data, error } = await supabase.from('site_settings').select('*').single();
+    if (error) {
+      console.log("Settings table might be missing");
+    } else if (data) {
+      setSettingsId(data.id);
+      setSiteName(data.site_name || "");
+      setSiteDesc(data.site_description || "");
+      setFooterText(data.footer_text || "");
+    }
+  };
+
   const generateSlug = (text: string) => {
-    return text
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)+/g, '');
+    return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
   };
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,25 +129,15 @@ const Admin = () => {
     const fileExt = file.name.split('.').pop();
     const fileName = `${Math.random()}.${fileExt}`;
     const filePath = `${fileName}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from('images')
-      .upload(filePath, file);
-
-    if (uploadError) {
-      console.error("Upload error:", uploadError);
-      // Fallback if storage fails (don't break the post creation)
-      return null;
-    }
-
+    const { error } = await supabase.storage.from('images').upload(filePath, file);
+    if (error) return null;
     const { data } = supabase.storage.from('images').getPublicUrl(filePath);
     return data.publicUrl;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleBlogSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
-
     try {
       let thumbnailUrl = "";
       if (file) {
@@ -176,245 +153,250 @@ const Admin = () => {
         category_id: categoryId,
         card_size: cardSize as any,
         thumbnail_url: thumbnailUrl,
+        seo_title: seoTitle || title,
+        seo_description: seoDesc
       });
 
       if (error) throw error;
-
-      toast.success("Məqalə uğurla yaradıldı!");
-      // Reset form & Refresh list
-      setTitle("");
-      setSlug("");
-      setContent("");
-      setFile(null);
+      toast.success("Məqalə yaradıldı!");
+      setTitle(""); setSlug(""); setContent(""); setFile(null); setSeoTitle(""); setSeoDesc("");
       fetchPosts(); 
     } catch (error: any) {
-      console.error(error);
-      toast.error(error.message || "Xəta baş verdi");
+      toast.error(error.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSettingsSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      if (settingsId) {
+        const { error } = await supabase.from('site_settings').update({
+          site_name: siteName,
+          site_description: siteDesc,
+          footer_text: footerText
+        }).eq('id', settingsId);
+        if (error) throw error;
+      } else {
+        // If no settings row exists yet
+         const { error } = await supabase.from('site_settings').insert({
+          site_name: siteName,
+          site_description: siteDesc,
+          footer_text: footerText
+        });
+        if (error) throw error;
+      }
+      toast.success("Ayarlar yeniləndi!");
+      fetchSettings();
+    } catch (error: any) {
+      toast.error("Xəta: Cədvəl yoxdursa, aşağıdakı SQL kodunu işlədin.");
+      setShowSqlDialog(true);
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Bu məqaləni silmək istədiyinizə əminsiniz?")) return;
-
-    try {
-      const { error } = await supabase.from('posts').delete().eq('id', id);
-      if (error) throw error;
-      toast.success("Məqalə silindi");
-      fetchPosts();
-    } catch (error: any) {
-      toast.error("Silinmə zamanı xəta: " + error.message);
-    }
-  };
-
-  const handleSeed = async () => {
-    if (!confirm("Demo məlumatlar yüklənsin? Bu mövcud kateqoriyaları yeniləyə bilər.")) return;
-    
-    setSeeding(true);
-    setSeedError(null);
-    
-    try {
-      await seedDatabase();
-      fetchCategories();
-      fetchPosts();
-      toast.success("Məlumatlar yükləndi! Səhifə yenilənir...");
-      setTimeout(() => window.location.reload(), 1500);
-    } catch (error: any) {
-      setSeedError(error.message);
-    } finally {
-      setSeeding(false);
-    }
+    if (!confirm("Silmək istəyirsiniz?")) return;
+    await supabase.from('posts').delete().eq('id', id);
+    toast.success("Silindi");
+    fetchPosts();
   };
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(SQL_FIX_CODE);
+    navigator.clipboard.writeText(SQL_FIX_SETTINGS);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-    toast.success("SQL kodu kopyalandı!");
+    toast.success("Kopyalandı!");
   };
 
-  if (loading) return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-white">Loading...</div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-[#050505] pb-20">
+    <div className="min-h-screen pb-20 bg-background text-foreground">
+      <SEO title="Admin Panel" />
       <Navbar />
       
-      <main className="max-w-4xl mx-auto px-6 pt-32">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-          <h1 className="text-3xl font-bold text-white">Admin Panel</h1>
-          <div className="flex gap-2 w-full md:w-auto">
-            <Button 
-              variant="secondary" 
-              onClick={handleSeed} 
-              disabled={seeding}
-              className="bg-cyan-900/20 text-cyan-400 hover:bg-cyan-900/40 border border-cyan-500/30 w-full md:w-auto"
-            >
-              {seeding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DbIcon className="mr-2 h-4 w-4" />}
-              Demo Data Yüklə
-            </Button>
-            <Button variant="outline" onClick={() => supabase.auth.signOut().then(() => navigate('/'))} className="w-full md:w-auto">
-              Çıxış
-            </Button>
-          </div>
+      <main className="max-w-6xl mx-auto px-6 pt-32">
+        <div className="flex justify-between items-center mb-8">
+          <h1 className="text-3xl font-bold">Admin Panel</h1>
+          <Button variant="outline" onClick={() => supabase.auth.signOut().then(() => navigate('/'))}>
+            Çıxış
+          </Button>
         </div>
 
-        {seedError && (
-          <Alert variant="destructive" className="mb-6 border-red-500/50 bg-red-900/10 text-red-200">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>
-              {seedError.includes("Cədvəllər tapılmadı") ? "Verilənlər Bazası Boşdur" : "Xəta Baş Verdi"}
-            </AlertTitle>
-            <AlertDescription className="flex flex-col gap-2">
-              <span>{seedError}</span>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                className="w-fit bg-red-950/50 border-red-500/50 hover:bg-red-900/50 text-white"
-                onClick={() => setShowSqlDialog(true)}
-              >
-                <RefreshCw className="w-4 h-4 mr-2" />
-                Sıfırlama Kodu (SQL)
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="blog" className="flex items-center gap-2">
+              <PenTool className="w-4 h-4" /> Bloq
+            </TabsTrigger>
+            <TabsTrigger value="settings" className="flex items-center gap-2">
+              <Settings className="w-4 h-4" /> Ayarlar
+            </TabsTrigger>
+          </TabsList>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* CREATE POST FORM */}
-          <section className="space-y-6">
-            <h2 className="text-xl font-semibold text-white border-b border-white/10 pb-2">Yeni Məqalə</h2>
-            <form onSubmit={handleSubmit} className="space-y-5 glass-panel p-6 rounded-2xl">
-              
-              <div className="grid gap-2">
-                <Label className="text-white">Başlıq (AZ)</Label>
-                <Input required value={title} onChange={handleTitleChange} className="bg-white/5 border-white/10 text-white" />
-              </div>
+          {/* BLOG TAB */}
+          <TabsContent value="blog" className="space-y-6 animate-in fade-in-50 duration-500">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Form Area */}
+              <Card className="lg:col-span-2 border-border/50 shadow-sm">
+                <CardHeader>
+                  <CardTitle>Yeni Məqalə</CardTitle>
+                  <CardDescription>Yeni bloq yazısı yaratmaq üçün formu doldurun.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleBlogSubmit} className="space-y-5">
+                    <div className="grid gap-2">
+                      <Label>Başlıq</Label>
+                      <Input required value={title} onChange={handleTitleChange} placeholder="Məqalənin adı..." />
+                    </div>
 
-              <div className="grid gap-2">
-                <Label className="text-white">Slug</Label>
-                <Input value={slug} readOnly className="bg-white/5 border-white/10 text-gray-400" />
-              </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="grid gap-2">
+                        <Label>Kateqoriya</Label>
+                        <Select onValueChange={setCategoryId} required>
+                          <SelectTrigger><SelectValue placeholder="Seçin" /></SelectTrigger>
+                          <SelectContent>
+                            {categories.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.id}>{cat.name_az}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>Oxuma vaxtı</Label>
+                        <Input placeholder="3 dəq" value={readTime} onChange={(e) => setReadTime(e.target.value)} required />
+                      </div>
+                    </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label className="text-white">Kateqoriya</Label>
-                  <Select onValueChange={setCategoryId} required>
-                    <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue placeholder="Seçin" /></SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>{cat.name_az}</SelectItem>
+                    <div className="grid gap-2">
+                      <Label>Məzmun (HTML)</Label>
+                      <Textarea 
+                        value={content} 
+                        onChange={(e) => setContent(e.target.value)} 
+                        className="min-h-[200px] font-mono text-sm" 
+                        placeholder="<p>Mətn...</p>"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg border border-border/50">
+                      <div className="grid gap-2">
+                        <Label>SEO Title</Label>
+                        <Input value={seoTitle} onChange={(e) => setSeoTitle(e.target.value)} placeholder="Google-da görünən başlıq" />
+                      </div>
+                      <div className="grid gap-2">
+                        <Label>SEO Description</Label>
+                        <Input value={seoDesc} onChange={(e) => setSeoDesc(e.target.value)} placeholder="Qısa məzmun" />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-4">
+                      <div className="grid gap-2 w-1/2">
+                        <Label>Ölçü</Label>
+                        <Select onValueChange={setCardSize} defaultValue="standard">
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="standard">Standard</SelectItem>
+                            <SelectItem value="hero">Hero (Böyük)</SelectItem>
+                            <SelectItem value="wide">Wide (Geniş)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="grid gap-2 w-1/2">
+                        <Label>Şəkil</Label>
+                        <Input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                      </div>
+                    </div>
+
+                    <Button type="submit" disabled={submitting} className="w-full">
+                      {submitting ? <Loader2 className="animate-spin mr-2" /> : <Upload className="mr-2 h-4 w-4" />}
+                      Dərc Et
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              {/* Sidebar List */}
+              <div className="space-y-4">
+                 <Card className="h-[600px] flex flex-col border-border/50 shadow-sm">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg">Yazılar ({posts.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
+                      {posts.map((post) => (
+                        <div key={post.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/40 hover:bg-muted/80 transition-colors group border border-transparent hover:border-border">
+                          <div className="min-w-0">
+                            <h4 className="text-sm font-medium truncate">{post.title_az}</h4>
+                            <p className="text-xs text-muted-foreground truncate">{post.created_at.split('T')[0]}</p>
+                          </div>
+                          <div className="flex gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
+                            <a href={`/post/${post.slug}`} target="_blank" className="p-2 hover:text-primary"><ExternalLink className="w-4 h-4" /></a>
+                            <button onClick={() => handleDelete(post.id)} className="p-2 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </div>
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label className="text-white">Vaxt</Label>
-                  <Input placeholder="məs: 2 dəq" value={readTime} onChange={(e) => setReadTime(e.target.value)} required className="bg-white/5 border-white/10 text-white"/>
-                </div>
+                    </CardContent>
+                 </Card>
               </div>
+            </div>
+          </TabsContent>
 
-              <div className="grid gap-2">
-                <Label className="text-white">Ölçü</Label>
-                <Select onValueChange={setCardSize} defaultValue="standard">
-                  <SelectTrigger className="bg-white/5 border-white/10 text-white"><SelectValue placeholder="Standard" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="standard">Standard (1x1)</SelectItem>
-                    <SelectItem value="hero">Hero (2x2)</SelectItem>
-                    <SelectItem value="wide">Wide (2x1)</SelectItem>
-                    <SelectItem value="square">Square (Icon)</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid gap-2">
-                <Label className="text-white">Şəkil</Label>
-                <Input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} className="bg-white/5 border-white/10 text-white file:bg-cyan-900 file:text-cyan-100 file:border-0 file:rounded-md"/>
-              </div>
-
-              <div className="grid gap-2">
-                <Label className="text-white">Məzmun (HTML)</Label>
-                <Textarea value={content} onChange={(e) => setContent(e.target.value)} className="min-h-[150px] bg-white/5 border-white/10 text-white font-mono" placeholder="<p>Mətn...</p>"/>
-              </div>
-
-              <Button type="submit" disabled={submitting} className="w-full bg-cyan-600 hover:bg-cyan-500 text-white">
-                {submitting ? <Loader2 className="animate-spin mr-2" /> : <Upload className="mr-2 h-4 w-4" />}
-                Yadda Saxla
-              </Button>
-            </form>
-          </section>
-
-          {/* POST LIST */}
-          <section className="space-y-6">
-            <h2 className="text-xl font-semibold text-white border-b border-white/10 pb-2">Mövcud Məqalələr</h2>
-            <div className="glass-panel p-4 rounded-2xl h-[800px] overflow-y-auto space-y-3 custom-scrollbar">
-              {posts.length === 0 ? (
-                 <p className="text-gray-500 text-center py-4">Məqalə yoxdur.</p>
-              ) : (
-                posts.map((post) => (
-                  <div key={post.id} className="flex items-center justify-between p-3 rounded-lg bg-white/5 border border-white/5 hover:bg-white/10 transition-colors group">
-                    <div className="flex items-center gap-3 overflow-hidden">
-                       <div className="w-10 h-10 rounded bg-gray-800 overflow-hidden flex-shrink-0">
-                         {post.thumbnail_url && <img src={post.thumbnail_url} alt="" className="w-full h-full object-cover opacity-70" />}
-                       </div>
-                       <div className="min-w-0">
-                         <h4 className="text-sm font-medium text-white truncate">{post.title_az}</h4>
-                         <p className="text-xs text-gray-500 truncate">/{post.slug}</p>
-                       </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <a href={`/post/${post.slug}`} target="_blank" className="p-2 text-gray-400 hover:text-cyan-400 transition-colors">
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                      <button 
-                        onClick={() => handleDelete(post.id)}
-                        className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
+          {/* SETTINGS TAB */}
+          <TabsContent value="settings" className="max-w-2xl mx-auto animate-in fade-in-50 duration-500">
+            <Card>
+              <CardHeader>
+                <CardTitle>Sayt Ayarları</CardTitle>
+                <CardDescription>Saytın adı, SEO və ümumi məlumatları buradan idarə edin.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSettingsSubmit} className="space-y-6">
+                  <div className="grid gap-2">
+                    <Label>Saytın Adı (Brand)</Label>
+                    <Input value={siteName} onChange={(e) => setSiteName(e.target.value)} placeholder="Sayt.me" />
                   </div>
-                ))
-              )}
-            </div>
-          </section>
-        </div>
+                  
+                  <div className="grid gap-2">
+                    <Label>Sayt Haqqında (Description)</Label>
+                    <Textarea value={siteDesc} onChange={(e) => setSiteDesc(e.target.value)} placeholder="Saytın qısa təsviri..." />
+                  </div>
 
-        <div className="mt-8 pt-6 border-t border-white/10 flex items-center justify-center text-gray-500 text-xs gap-2">
-          <Info className="w-4 h-4" />
-          <span>Project ID: <span className="text-cyan-400 font-mono">{PROJECT_ID}</span> (SQL Editor-da bu layihədə olduğunuza əmin olun)</span>
-        </div>
+                  <div className="grid gap-2">
+                    <Label>Footer Mətni</Label>
+                    <Input value={footerText} onChange={(e) => setFooterText(e.target.value)} placeholder="© 2024 Bütün hüquqlar qorunur." />
+                  </div>
 
-        {/* SQL FIX DIALOG */}
+                  <Button type="submit" disabled={submitting} variant="secondary" className="w-full">
+                    {submitting ? <Loader2 className="animate-spin mr-2" /> : <Settings className="mr-2 h-4 w-4" />}
+                    Ayarları Yenilə
+                  </Button>
+                </form>
+
+                <div className="mt-8 p-4 bg-muted/30 rounded-lg text-xs text-muted-foreground">
+                  <p className="flex items-center gap-2 mb-2"><Info className="w-4 h-4" /> <strong>Qeyd:</strong> Əgər "Settings table not found" xətası alsanız:</p>
+                  <Button size="sm" variant="outline" onClick={() => setShowSqlDialog(true)} className="w-full">
+                    SQL Kodunu Göstər
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* SQL Dialog */}
         <Dialog open={showSqlDialog} onOpenChange={setShowSqlDialog}>
-          <DialogContent className="glass-card border-white/10 text-white max-w-2xl">
+          <DialogContent>
             <DialogHeader>
-              <DialogTitle>Məlumat Bazasını Tam Sıfırla (Nuclear Option)</DialogTitle>
-              <DialogDescription className="text-gray-400">
-                Bu kod bütün cədvəlləri siləcək, yenidən yaradacaq və təhlükəsizlik kilidlərini (RLS) söndürəcək.
-                <br />
-                <b>Supabase Dashboard {'>'} SQL Editor</b> səhifəsində işlədin.
-              </DialogDescription>
+              <DialogTitle>Settings Cədvəlini Yarat</DialogTitle>
+              <DialogDescription>Bu kodu Supabase SQL Editor-da işlədin.</DialogDescription>
             </DialogHeader>
-            
-            <div className="relative mt-4">
-              <pre className="p-4 rounded-xl bg-black/50 border border-white/10 text-xs font-mono text-green-400 overflow-x-auto h-52 select-all">
-                {SQL_FIX_CODE}
+            <div className="relative mt-2">
+              <pre className="p-4 rounded bg-black/90 text-green-400 text-xs overflow-auto h-40">
+                {SQL_FIX_SETTINGS}
               </pre>
-              <Button 
-                size="sm" 
-                className="absolute top-2 right-2 bg-white/10 hover:bg-white/20 text-white border-white/10"
-                onClick={copyToClipboard}
-              >
-                {copied ? <Check className="w-4 h-4 mr-1" /> : <Copy className="w-4 h-4 mr-1" />}
-                {copied ? "Kopyalandı" : "Kopyala"}
-              </Button>
-            </div>
-            
-            <div className="flex justify-end mt-4">
-              <Button onClick={() => setShowSqlDialog(false)} variant="secondary">
-                Bağla
+              <Button size="sm" className="absolute top-2 right-2" onClick={copyToClipboard}>
+                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
               </Button>
             </div>
           </DialogContent>
