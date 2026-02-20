@@ -76,7 +76,7 @@ CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING ( bucket_id = 
 CREATE POLICY "Auth Upload" ON storage.objects FOR INSERT TO authenticated WITH CHECK ( bucket_id = 'images' );
 `;
 
-const PROJECT_ID = "beggutkvhddsodeeoike";
+const PROJECT_ID = "qnpoftjwfwzgxmuzqauc";
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -268,7 +268,7 @@ const Admin = () => {
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>İcazə Xətası (RLS)</AlertTitle>
             <AlertDescription className="flex flex-col gap-2">
-              <span>Məlumat bazası kilidlidir. Aşağıdakı həll yolunu tətbiq edin: <b>Cədvəlləri tam sıfırlamaq.</b></span>
+              <span>Məlumat bazası boşdur və ya kilidlidir. Aşağıdakı həll yolunu tətbiq edin: <b>Cədvəlləri tam sıfırlamaq.</b></span>
               <Button 
                 variant="outline" 
                 size="sm" 
