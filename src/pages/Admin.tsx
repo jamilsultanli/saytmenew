@@ -1,124 +1,76 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Upload, Trash2, ExternalLink, Copy, Check, Info, Settings, PenTool, Image as ImageIcon, X } from "lucide-react";
+import { 
+  LayoutDashboard, 
+  FileText, 
+  Settings, 
+  Tags, 
+  LogOut, 
+  Plus, 
+  Search, 
+  Image as ImageIcon, 
+  Loader2, 
+  Trash2, 
+  Edit, 
+  Eye, 
+  Save, 
+  UploadCloud,
+  BarChart3,
+  Globe
+} from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { SEO } from "@/components/SEO";
+import { cn } from "@/lib/utils";
 
 type Category = Database['public']['Tables']['categories']['Row'];
 type Post = Database['public']['Tables']['posts']['Row'];
+type Settings = Database['public']['Tables']['site_settings']['Row'];
 
-// Complete SQL Setup: Tables + Storage
-const SQL_SETUP = `
--- 1. Create Site Settings Table
-CREATE TABLE IF NOT EXISTS public.site_settings (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  site_name TEXT DEFAULT 'Sayt.me',
-  site_description TEXT,
-  logo_url TEXT,
-  favicon_url TEXT,
-  footer_text TEXT,
-  social_links JSONB,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+// --- Helper Components ---
+
+const StatCard = ({ title, value, icon: Icon, description }: { title: string, value: string | number, icon: any, description?: string }) => (
+  <Card>
+    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+      <CardTitle className="text-sm font-medium">{title}</CardTitle>
+      <Icon className="h-4 w-4 text-muted-foreground" />
+    </CardHeader>
+    <CardContent>
+      <div className="text-2xl font-bold">{value}</div>
+      {description && <p className="text-xs text-muted-foreground">{description}</p>}
+    </CardContent>
+  </Card>
 );
-
-ALTER TABLE public.site_settings DISABLE ROW LEVEL SECURITY;
-
-INSERT INTO public.site_settings (site_name, site_description)
-SELECT 'Sayt.me', 'Mənim şəxsi bloqum'
-WHERE NOT EXISTS (SELECT 1 FROM public.site_settings);
-
--- 2. Create Storage Bucket for Images
-INSERT INTO storage.buckets (id, name, public) 
-VALUES ('images', 'images', true)
-ON CONFLICT (id) DO NOTHING;
-
--- 3. Storage Policies (Allow Public Read, Auth Upload)
-DROP POLICY IF EXISTS "Public Access" ON storage.objects;
-DROP POLICY IF EXISTS "Auth Upload" ON storage.objects;
-DROP POLICY IF EXISTS "Auth Delete" ON storage.objects;
-
-CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING ( bucket_id = 'images' );
-CREATE POLICY "Auth Upload" ON storage.objects FOR INSERT TO authenticated WITH CHECK ( bucket_id = 'images' );
-CREATE POLICY "Auth Delete" ON storage.objects FOR DELETE TO authenticated USING ( bucket_id = 'images' );
-`;
 
 const Admin = () => {
   const navigate = useNavigate();
+  const [activeView, setActiveView] = useState<'dashboard' | 'posts' | 'categories' | 'settings'>('dashboard');
   const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState("blog");
   
   // Data State
   const [categories, setCategories] = useState<Category[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
-  
-  // Blog Form State
-  const [title, setTitle] = useState("");
-  const [slug, setSlug] = useState("");
-  const [content, setContent] = useState("");
-  const [readTime, setReadTime] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [cardSize, setCardSize] = useState("standard");
-  const [seoTitle, setSeoTitle] = useState("");
-  const [seoDesc, setSeoDesc] = useState("");
-  
-  // Image Upload State
-  const [file, setFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-
-  // Settings Form State
-  const [siteName, setSiteName] = useState("");
-  const [siteDesc, setSiteDesc] = useState("");
-  const [footerText, setFooterText] = useState("");
-  const [settingsId, setSettingsId] = useState<string | null>(null);
-  
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
-  const [currentLogo, setCurrentLogo] = useState<string | null>(null);
-  
-  const [faviconFile, setFaviconFile] = useState<File | null>(null);
-  const [faviconPreview, setFaviconPreview] = useState<string | null>(null);
-  const [currentFavicon, setCurrentFavicon] = useState<string | null>(null);
-
-  // Error/Dialog State
-  const [showSqlDialog, setShowSqlDialog] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [settings, setSettings] = useState<Settings | null>(null);
 
   useEffect(() => {
     checkUser();
-    fetchCategories();
-    fetchPosts();
-    fetchSettings();
   }, []);
 
   const checkUser = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       navigate("/login");
+      return;
     }
+    await Promise.all([fetchPosts(), fetchCategories(), fetchSettings()]);
     setLoading(false);
-  };
-
-  const fetchCategories = async () => {
-    const { data } = await supabase.from('categories').select('*');
-    if (data) setCategories(data);
   };
 
   const fetchPosts = async () => {
@@ -126,413 +78,511 @@ const Admin = () => {
     if (data) setPosts(data);
   };
 
+  const fetchCategories = async () => {
+    const { data } = await supabase.from('categories').select('*').order('name_az');
+    if (data) setCategories(data);
+  };
+
   const fetchSettings = async () => {
-    try {
-      const { data, error } = await supabase.from('site_settings').select('*').maybeSingle();
+    const { data } = await supabase.from('site_settings').select('*').maybeSingle();
+    if (data) setSettings(data);
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate('/');
+  };
+
+  // --- Sub-Components (Internal for simpler state access) ---
+
+  const DashboardView = () => (
+    <div className="space-y-6 animate-in fade-in-50">
+      <h2 className="text-3xl font-bold tracking-tight">İdarəetmə Paneli</h2>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <StatCard title="Ümumi Məqalələr" value={posts.length} icon={FileText} description="Sistemsdə olan aktiv yazılar" />
+        <StatCard title="Kateqoriyalar" value={categories.length} icon={Tags} description="Mövcud mövzular" />
+        <StatCard title="Ümumi Baxış" value="12.5k" icon={Eye} description="Son 30 gün (Demo)" />
+        <StatCard title="SEO Skoru" value="92/100" icon={BarChart3} description="Optimallaşdırma səviyyəsi" />
+      </div>
       
-      if (error) {
-        // Only show dialog if it's a "relation does not exist" error (code 42P01)
-        if (error.code === '42P01') {
-          console.warn("Site settings table missing. Showing setup dialog.");
-          setShowSqlDialog(true);
-        } else {
-          console.error("Error fetching settings:", error);
-        }
-      } else if (data) {
-        setSettingsId(data.id);
-        setSiteName(data.site_name || "");
-        setSiteDesc(data.site_description || "");
-        setFooterText(data.footer_text || "");
-        setCurrentLogo(data.logo_url);
-        setCurrentFavicon(data.favicon_url);
-      }
-    } catch (err) {
-      console.error("Unexpected error fetching settings:", err);
-    }
-  };
-
-  const generateSlug = (text: string) => {
-    return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
-  };
-
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTitle(e.target.value);
-    setSlug(generateSlug(e.target.value));
-  };
-
-  // Generic File Upload Handler
-  const uploadFile = async (file: File) => {
-    const fileExt = file.name.split('.').pop();
-    const uniqueId = crypto.randomUUID();
-    const fileName = `${uniqueId}.${fileExt}`;
-    
-    const { error } = await supabase.storage.from('images').upload(fileName, file);
-    if (error) throw error;
-    
-    const { data } = supabase.storage.from('images').getPublicUrl(fileName);
-    return data.publicUrl;
-  };
-
-  // Image Preview Handler
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, setFileState: (f: File | null) => void, setPreviewState: (s: string | null) => void) => {
-    const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFileState(selectedFile);
-      const objectUrl = URL.createObjectURL(selectedFile);
-      setPreviewState(objectUrl);
-    } else {
-      setFileState(null);
-      setPreviewState(null);
-    }
-  };
-
-  const handleBlogSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      let thumbnailUrl = "";
-      if (file) {
-        thumbnailUrl = await uploadFile(file);
-      }
-
-      const { error } = await supabase.from('posts').insert({
-        title_az: title,
-        slug,
-        content_html: content,
-        read_time_az: readTime,
-        category_id: categoryId,
-        card_size: cardSize as any,
-        thumbnail_url: thumbnailUrl,
-        seo_title: seoTitle || title,
-        seo_description: seoDesc
-      });
-
-      if (error) {
-        if (error.code === "42P01" || error.message.includes("bucket")) {
-            setShowSqlDialog(true);
-            throw new Error("Zəhmət olmasa SQL kodunu işə salaraq bazanı qurun.");
-        }
-        throw error;
-      }
-
-      toast.success("Məqalə yaradıldı!");
-      // Reset form
-      setTitle(""); setSlug(""); setContent(""); setReadTime(""); 
-      setFile(null); setImagePreview(null); setSeoTitle(""); setSeoDesc("");
-      fetchPosts(); 
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleSettingsSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      let logoUrl = currentLogo;
-      let faviconUrl = currentFavicon;
-
-      if (logoFile) logoUrl = await uploadFile(logoFile);
-      if (faviconFile) faviconUrl = await uploadFile(faviconFile);
-
-      const payload = {
-        site_name: siteName,
-        site_description: siteDesc,
-        footer_text: footerText,
-        logo_url: logoUrl,
-        favicon_url: faviconUrl
-      };
-
-      if (settingsId) {
-        const { error } = await supabase.from('site_settings').update(payload).eq('id', settingsId);
-        if (error) throw error;
-      } else {
-         const { error } = await supabase.from('site_settings').insert(payload);
-        if (error) throw error;
-      }
-      toast.success("Ayarlar yeniləndi!");
-      fetchSettings();
-      // Clear previews
-      setLogoPreview(null);
-      setFaviconPreview(null);
-    } catch (error: any) {
-      toast.error(error.message);
-      if (error.message.includes("bucket") || error.code === "42P01") {
-          setShowSqlDialog(true);
-      }
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleDelete = async (id: string) => {
-    if (!confirm("Silmək istəyirsiniz?")) return;
-    await supabase.from('posts').delete().eq('id', id);
-    toast.success("Silindi");
-    fetchPosts();
-  };
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(SQL_SETUP);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-    toast.success("Kopyalandı!");
-  };
-
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-
-  return (
-    <div className="min-h-screen pb-20 bg-background text-foreground">
-      <SEO title="Admin Panel" />
-      <Navbar />
-      
-      <main className="max-w-6xl mx-auto px-6 pt-32">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Admin Panel</h1>
-          <Button variant="outline" onClick={() => supabase.auth.signOut().then(() => navigate('/'))}>
-            Çıxış
-          </Button>
-        </div>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
-            <TabsTrigger value="blog" className="flex items-center gap-2">
-              <PenTool className="w-4 h-4" /> Bloq
-            </TabsTrigger>
-            <TabsTrigger value="settings" className="flex items-center gap-2">
-              <Settings className="w-4 h-4" /> Ayarlar
-            </TabsTrigger>
-          </TabsList>
-
-          {/* BLOG TAB */}
-          <TabsContent value="blog" className="space-y-6 animate-in fade-in-50 duration-500">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Form Area */}
-              <Card className="lg:col-span-2 border-border/50 shadow-sm">
-                <CardHeader>
-                  <CardTitle>Yeni Məqalə</CardTitle>
-                  <CardDescription>Yeni bloq yazısı yaratmaq üçün formu doldurun.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <form onSubmit={handleBlogSubmit} className="space-y-5">
-                    <div className="grid gap-2">
-                      <Label>Başlıq</Label>
-                      <Input required value={title} onChange={handleTitleChange} placeholder="Məqalənin adı..." />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="grid gap-2">
-                        <Label>Kateqoriya</Label>
-                        <Select onValueChange={setCategoryId} required>
-                          <SelectTrigger><SelectValue placeholder="Seçin" /></SelectTrigger>
-                          <SelectContent>
-                            {categories.map((cat) => (
-                              <SelectItem key={cat.id} value={cat.id}>{cat.name_az}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>Oxuma vaxtı</Label>
-                        <Input placeholder="3 dəq" value={readTime} onChange={(e) => setReadTime(e.target.value)} required />
-                      </div>
-                    </div>
-
-                    <div className="grid gap-2">
-                      <Label>Məzmun (HTML)</Label>
-                      <Textarea 
-                        value={content} 
-                        onChange={(e) => setContent(e.target.value)} 
-                        className="min-h-[200px] font-mono text-sm" 
-                        placeholder="<p>Mətn...</p>"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg border border-border/50">
-                      <div className="grid gap-2">
-                        <Label>SEO Title</Label>
-                        <Input value={seoTitle} onChange={(e) => setSeoTitle(e.target.value)} placeholder="Google-da görünən başlıq" />
-                      </div>
-                      <div className="grid gap-2">
-                        <Label>SEO Description</Label>
-                        <Input value={seoDesc} onChange={(e) => setSeoDesc(e.target.value)} placeholder="Qısa məzmun" />
-                      </div>
-                    </div>
-
-                    <div className="flex gap-4 items-end">
-                      <div className="grid gap-2 w-1/2">
-                        <Label>Ölçü</Label>
-                        <Select onValueChange={setCardSize} defaultValue="standard">
-                          <SelectTrigger><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="standard">Standard</SelectItem>
-                            <SelectItem value="hero">Hero (Böyük)</SelectItem>
-                            <SelectItem value="wide">Wide (Geniş)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="grid gap-2 w-1/2">
-                        <Label>Məqalə Şəkli</Label>
-                        <div className="relative">
-                           <Input 
-                             type="file" 
-                             accept="image/*"
-                             onChange={(e) => handleFileSelect(e, setFile, setImagePreview)} 
-                             className="cursor-pointer"
-                           />
-                           {imagePreview && (
-                             <div className="mt-2 relative rounded-lg overflow-hidden border border-border w-full h-32 group">
-                               <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
-                               <button 
-                                 type="button" 
-                                 onClick={() => { setFile(null); setImagePreview(null); }}
-                                 className="absolute top-1 right-1 p-1 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                               >
-                                 <X className="w-4 h-4" />
-                               </button>
-                             </div>
-                           )}
-                        </div>
-                      </div>
-                    </div>
-
-                    <Button type="submit" disabled={submitting} className="w-full">
-                      {submitting ? <Loader2 className="animate-spin mr-2" /> : <Upload className="mr-2 h-4 w-4" />}
-                      Dərc Et
-                    </Button>
-                  </form>
-                </CardContent>
-              </Card>
-
-              {/* Sidebar List */}
-              <div className="space-y-4">
-                 <Card className="h-[600px] flex flex-col border-border/50 shadow-sm">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg">Yazılar ({posts.length})</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-2">
-                      {posts.map((post) => (
-                        <div key={post.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/40 hover:bg-muted/80 transition-colors group border border-transparent hover:border-border">
-                          <div className="min-w-0">
-                            <h4 className="text-sm font-medium truncate">{post.title_az}</h4>
-                            <p className="text-xs text-muted-foreground truncate">{post.created_at.split('T')[0]}</p>
-                          </div>
-                          <div className="flex gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
-                            <a href={`/post/${post.slug}`} target="_blank" className="p-2 hover:text-primary"><ExternalLink className="w-4 h-4" /></a>
-                            <button onClick={() => handleDelete(post.id)} className="p-2 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
-                          </div>
-                        </div>
-                      ))}
-                    </CardContent>
-                 </Card>
-              </div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
+        <Card className="col-span-4">
+          <CardHeader>
+            <CardTitle>Son Yazılar</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {posts.slice(0, 5).map(post => (
+                <div key={post.id} className="flex items-center justify-between border-b pb-2 last:border-0">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium leading-none">{post.title_az}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(post.created_at).toLocaleDateString()}</p>
+                  </div>
+                  <div className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
+                    {post.card_size}
+                  </div>
+                </div>
+              ))}
             </div>
-          </TabsContent>
+          </CardContent>
+        </Card>
+        
+        <Card className="col-span-3">
+          <CardHeader>
+             <CardTitle>Sürətli Əməliyyatlar</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+             <Button variant="outline" className="w-full justify-start" onClick={() => setActiveView('posts')}>
+               <Plus className="mr-2 h-4 w-4" /> Yeni Məqalə Yaz
+             </Button>
+             <Button variant="outline" className="w-full justify-start" onClick={() => setActiveView('categories')}>
+               <Tags className="mr-2 h-4 w-4" /> Kateqoriya Əlavə et
+             </Button>
+             <Button variant="outline" className="w-full justify-start" onClick={() => setActiveView('settings')}>
+               <Settings className="mr-2 h-4 w-4" /> Sayt Ayarlarını Dəyiş
+             </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 
-          {/* SETTINGS TAB */}
-          <TabsContent value="settings" className="max-w-2xl mx-auto animate-in fade-in-50 duration-500">
-            <Card>
-              <CardHeader>
-                <CardTitle>Sayt Ayarları</CardTitle>
-                <CardDescription>Brendinq, Logo və SEO məlumatlarını idarə edin.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSettingsSubmit} className="space-y-6">
+  const PostsManager = () => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [editId, setEditId] = useState<string | null>(null);
+    const [formTitle, setFormTitle] = useState("");
+    const [formSlug, setFormSlug] = useState("");
+    const [formContent, setFormContent] = useState("");
+    const [formCat, setFormCat] = useState("");
+    const [formTime, setFormTime] = useState("");
+    const [formSize, setFormSize] = useState("standard");
+    const [formFile, setFormFile] = useState<File | null>(null);
+    const [formSeoTitle, setFormSeoTitle] = useState("");
+    const [formSeoDesc, setFormSeoDesc] = useState("");
+    const [uploading, setUploading] = useState(false);
+
+    const resetForm = () => {
+      setIsEditing(false); setEditId(null);
+      setFormTitle(""); setFormSlug(""); setFormContent(""); setFormCat("");
+      setFormTime(""); setFormSize("standard"); setFormFile(null);
+      setFormSeoTitle(""); setFormSeoDesc("");
+    };
+
+    const handleEdit = (post: Post) => {
+      setIsEditing(true);
+      setEditId(post.id);
+      setFormTitle(post.title_az);
+      setFormSlug(post.slug);
+      setFormContent(post.content_html);
+      setFormCat(post.category_id || "");
+      setFormTime(post.read_time_az || "");
+      setFormSize(post.card_size || "standard");
+      setFormSeoTitle(post.seo_title || "");
+      setFormSeoDesc(post.seo_description || "");
+    };
+
+    const deletePost = async (id: string) => {
+      if(!confirm("Silmək istədiyinizə əminsiniz?")) return;
+      await supabase.from('posts').delete().eq('id', id);
+      toast.success("Məqalə silindi");
+      fetchPosts();
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setUploading(true);
+      try {
+        let thumbUrl = editId ? posts.find(p => p.id === editId)?.thumbnail_url : null;
+        
+        if (formFile) {
+           const fileExt = formFile.name.split('.').pop();
+           const fileName = `${Math.random()}.${fileExt}`;
+           const { error: uploadError } = await supabase.storage.from('images').upload(fileName, formFile);
+           if (uploadError) throw uploadError;
+           const { data } = supabase.storage.from('images').getPublicUrl(fileName);
+           thumbUrl = data.publicUrl;
+        }
+
+        const payload = {
+          title_az: formTitle,
+          slug: formSlug || formTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
+          content_html: formContent,
+          category_id: formCat,
+          read_time_az: formTime,
+          card_size: formSize as any,
+          thumbnail_url: thumbUrl,
+          seo_title: formSeoTitle || formTitle,
+          seo_description: formSeoDesc
+        };
+
+        if (editId) {
+          const { error } = await supabase.from('posts').update(payload).eq('id', editId);
+          if (error) throw error;
+          toast.success("Məqalə yeniləndi");
+        } else {
+          const { error } = await supabase.from('posts').insert(payload);
+          if (error) throw error;
+          toast.success("Məqalə yaradıldı");
+        }
+        
+        resetForm();
+        fetchPosts();
+      } catch (error: any) {
+        toast.error("Xəta: " + error.message);
+      } finally {
+        setUploading(false);
+      }
+    };
+
+    return (
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in-50">
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>{isEditing ? "Məqaləni Redaktə Et" : "Yeni Məqalə"}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid gap-2">
+                  <Label>Başlıq</Label>
+                  <Input value={formTitle} onChange={(e) => setFormTitle(e.target.value)} required />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div className="grid gap-2">
-                    <Label>Saytın Adı (Brand)</Label>
-                    <Input value={siteName} onChange={(e) => setSiteName(e.target.value)} placeholder="Sayt.me" />
+                    <Label>Kateqoriya</Label>
+                    <Select value={formCat} onValueChange={setFormCat} required>
+                      <SelectTrigger><SelectValue placeholder="Seçin" /></SelectTrigger>
+                      <SelectContent>
+                        {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name_az}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
-                  
                   <div className="grid gap-2">
-                    <Label>Sayt Haqqında (Description)</Label>
-                    <Textarea value={siteDesc} onChange={(e) => setSiteDesc(e.target.value)} placeholder="Saytın qısa təsviri..." />
+                    <Label>Oxuma Vaxtı</Label>
+                    <Input value={formTime} onChange={(e) => setFormTime(e.target.value)} placeholder="3 dəq" required />
                   </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                     <div className="grid gap-2">
-                        <Label>Logo</Label>
-                        <div className="flex flex-col gap-2">
-                           {/* Priority: Preview -> Current -> Placeholder */}
-                           {(logoPreview || currentLogo) ? (
-                             <div className="relative h-20 w-full border border-border rounded-lg flex items-center justify-center bg-muted/20">
-                               <img 
-                                 src={logoPreview || currentLogo || ""} 
-                                 alt="Logo" 
-                                 className="h-16 w-auto object-contain" 
-                               />
-                             </div>
-                           ) : (
-                             <div className="h-20 w-full border border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center text-muted-foreground">
-                               <ImageIcon className="w-6 h-6" />
-                             </div>
-                           )}
-                           <Input type="file" accept="image/*" onChange={(e) => handleFileSelect(e, setLogoFile, setLogoPreview)} />
-                        </div>
-                     </div>
-                     <div className="grid gap-2">
-                        <Label>Favicon</Label>
-                         <div className="flex flex-col gap-2">
-                           {(faviconPreview || currentFavicon) ? (
-                             <div className="relative h-20 w-full border border-border rounded-lg flex items-center justify-center bg-muted/20">
-                               <img 
-                                 src={faviconPreview || currentFavicon || ""} 
-                                 alt="Favicon" 
-                                 className="h-8 w-8 object-contain" 
-                               />
-                             </div>
-                           ) : (
-                             <div className="h-20 w-full border border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center text-muted-foreground">
-                               <ImageIcon className="w-6 h-6" />
-                             </div>
-                           )}
-                           <Input type="file" accept="image/*" onChange={(e) => handleFileSelect(e, setFaviconFile, setFaviconPreview)} />
-                        </div>
-                     </div>
-                  </div>
-
+                </div>
+                <div className="grid gap-2">
+                  <Label>Məzmun (HTML)</Label>
+                  <Textarea value={formContent} onChange={(e) => setFormContent(e.target.value)} className="font-mono min-h-[200px]" required />
+                </div>
+                <div className="p-4 bg-muted/30 border rounded-lg space-y-4">
+                  <h4 className="text-sm font-semibold flex items-center gap-2"><Globe className="w-4 h-4" /> SEO Ayarları</h4>
                   <div className="grid gap-2">
-                    <Label>Footer Mətni</Label>
-                    <Input value={footerText} onChange={(e) => setFooterText(e.target.value)} placeholder="© 2024 Bütün hüquqlar qorunur." />
+                    <Label>Meta Title</Label>
+                    <Input value={formSeoTitle} onChange={(e) => setFormSeoTitle(e.target.value)} placeholder="Google-da görünən başlıq" />
                   </div>
-
-                  <Button type="submit" disabled={submitting} variant="secondary" className="w-full">
-                    {submitting ? <Loader2 className="animate-spin mr-2" /> : <Settings className="mr-2 h-4 w-4" />}
-                    Ayarları Yenilə
-                  </Button>
-                </form>
-
-                <div className="mt-8 p-4 bg-muted/30 rounded-lg text-xs text-muted-foreground">
-                  <p className="flex items-center gap-2 mb-2"><Info className="w-4 h-4" /> <strong>Quraşdırma:</strong> Əgər Storage xətası alırsınızsa:</p>
-                  <Button size="sm" variant="outline" onClick={() => setShowSqlDialog(true)} className="w-full">
-                    SQL Kodunu Göstər (Bazanı Qur)
+                  <div className="grid gap-2">
+                    <Label>Meta Description</Label>
+                    <Textarea value={formSeoDesc} onChange={(e) => setFormSeoDesc(e.target.value)} placeholder="Axtarış nəticələrində görünən qısa mətn" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                     <Label>Ölçü (Grid)</Label>
+                     <Select value={formSize} onValueChange={setFormSize}>
+                       <SelectTrigger><SelectValue /></SelectTrigger>
+                       <SelectContent>
+                         <SelectItem value="standard">Standard (1x1)</SelectItem>
+                         <SelectItem value="wide">Wide (2x1)</SelectItem>
+                         <SelectItem value="hero">Hero (2x2)</SelectItem>
+                         <SelectItem value="square">Square Icon</SelectItem>
+                       </SelectContent>
+                     </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Şəkil</Label>
+                    <Input type="file" onChange={(e) => setFormFile(e.target.files?.[0] || null)} />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  {isEditing && <Button type="button" variant="outline" onClick={resetForm}>Ləğv et</Button>}
+                  <Button type="submit" disabled={uploading} className="flex-1">
+                    {uploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isEditing ? "Yenilə" : "Dərc Et"}
                   </Button>
                 </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+        <div className="space-y-4">
+          <Card className="h-[calc(100vh-100px)] flex flex-col">
+            <CardHeader>
+              <CardTitle>Məqalələr ({posts.length})</CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto custom-scrollbar">
+               <div className="space-y-2">
+                 {posts.map(post => (
+                   <div key={post.id} className="p-3 border rounded-lg hover:bg-muted/50 transition-colors flex items-center justify-between group">
+                     <div className="overflow-hidden">
+                       <p className="font-medium truncate">{post.title_az}</p>
+                       <p className="text-xs text-muted-foreground">{new Date(post.created_at).toLocaleDateString()}</p>
+                     </div>
+                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                       <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleEdit(post)}><Edit className="w-4 h-4" /></Button>
+                       <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deletePost(post.id)}><Trash2 className="w-4 h-4" /></Button>
+                     </div>
+                   </div>
+                 ))}
+               </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  };
 
-        {/* SQL Dialog */}
-        <Dialog open={showSqlDialog} onOpenChange={setShowSqlDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Məlumat Bazası və Storage Quraşdırılması</DialogTitle>
-              <DialogDescription>
-                Fayl yükləmək üçün bu SQL kodunu Supabase Dashboard-da işlədin.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="relative mt-2">
-              <pre className="p-4 rounded-lg bg-zinc-950 text-emerald-400 text-[10px] leading-relaxed overflow-auto h-60 border border-zinc-800 font-mono">
-                {SQL_SETUP}
-              </pre>
-              <Button size="icon" className="absolute top-3 right-3 h-6 w-6" onClick={copyToClipboard}>
-                {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-              </Button>
+  const CategoriesManager = () => {
+    const [name, setName] = useState("");
+    const [slug, setSlug] = useState("");
+    const [color, setColor] = useState("blue");
+
+    const addCategory = async (e: React.FormEvent) => {
+      e.preventDefault();
+      const { error } = await supabase.from('categories').insert({
+        name_az: name,
+        slug: slug || name.toLowerCase(),
+        color_theme: color
+      });
+      if (error) toast.error(error.message);
+      else {
+        toast.success("Kateqoriya əlavə olundu");
+        setName(""); setSlug("");
+        fetchCategories();
+      }
+    };
+
+    const deleteCat = async (id: string) => {
+      if(!confirm("Bu kateqoriyanı silmək istəyirsiniz?")) return;
+      await supabase.from('categories').delete().eq('id', id);
+      fetchCategories();
+      toast.success("Silindi");
+    }
+
+    return (
+      <div className="grid md:grid-cols-2 gap-8 animate-in fade-in-50">
+        <Card>
+          <CardHeader>
+            <CardTitle>Yeni Kateqoriya</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={addCategory} className="space-y-4">
+              <div className="grid gap-2">
+                <Label>Ad</Label>
+                <Input value={name} onChange={(e) => { setName(e.target.value); setSlug(e.target.value.toLowerCase()); }} required />
+              </div>
+              <div className="grid gap-2">
+                <Label>Slug (Link üçün)</Label>
+                <Input value={slug} onChange={(e) => setSlug(e.target.value)} required />
+              </div>
+              <div className="grid gap-2">
+                <Label>Rəng Teması</Label>
+                <Select value={color} onValueChange={setColor}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="blue">Blue</SelectItem>
+                    <SelectItem value="pink">Pink</SelectItem>
+                    <SelectItem value="yellow">Yellow</SelectItem>
+                    <SelectItem value="green">Green</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button type="submit" className="w-full">Əlavə Et</Button>
+            </form>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Mövcud Kateqoriyalar</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {categories.map(cat => (
+                <div key={cat.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-3 h-3 rounded-full bg-${cat.color_theme === 'pink' ? 'pink-500' : cat.color_theme === 'yellow' ? 'yellow-500' : 'blue-500'}`} />
+                    <span className="font-medium">{cat.name_az}</span>
+                  </div>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => deleteCat(cat.id)}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
             </div>
-          </DialogContent>
-        </Dialog>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  const SettingsManager = () => {
+    const [sName, setSName] = useState(settings?.site_name || "");
+    const [sDesc, setSDesc] = useState(settings?.site_description || "");
+    const [sFooter, setSFooter] = useState(settings?.footer_text || "");
+    const [logoFile, setLogoFile] = useState<File | null>(null);
+    const [favFile, setFavFile] = useState<File | null>(null);
+    const [saving, setSaving] = useState(false);
+
+    const handleSave = async (e: React.FormEvent) => {
+      e.preventDefault();
+      setSaving(true);
+      try {
+        let logoUrl = settings?.logo_url;
+        let favUrl = settings?.favicon_url;
+
+        // Upload Helper
+        const upload = async (f: File) => {
+           const name = `asset-${Date.now()}-${f.name}`;
+           const { error } = await supabase.storage.from('images').upload(name, f);
+           if (error) throw error;
+           const { data } = supabase.storage.from('images').getPublicUrl(name);
+           return data.publicUrl;
+        };
+
+        if (logoFile) logoUrl = await upload(logoFile);
+        if (favFile) favUrl = await upload(favFile);
+
+        const payload = {
+          site_name: sName,
+          site_description: sDesc,
+          footer_text: sFooter,
+          logo_url: logoUrl,
+          favicon_url: favUrl
+        };
+
+        if (settings?.id) {
+          await supabase.from('site_settings').update(payload).eq('id', settings.id);
+        } else {
+          await supabase.from('site_settings').insert(payload);
+        }
+        
+        await fetchSettings();
+        // Force reload to update Navbar logos
+        window.location.reload();
+        toast.success("Ayarlar yadda saxlanıldı!");
+      } catch (e: any) {
+        toast.error("Xəta: " + e.message);
+      } finally {
+        setSaving(false);
+      }
+    };
+
+    return (
+      <div className="max-w-2xl mx-auto animate-in fade-in-50">
+        <Card>
+          <CardHeader>
+             <CardTitle>Sayt Ayarları</CardTitle>
+             <CardDescription>Logo, Favicon və SEO məlumatlarını yeniləyin.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSave} className="space-y-6">
+              <div className="grid gap-2">
+                <Label>Saytın Adı</Label>
+                <Input value={sName} onChange={(e) => setSName(e.target.value)} />
+              </div>
+              <div className="grid gap-2">
+                <Label>Təsvir (SEO Description)</Label>
+                <Textarea value={sDesc} onChange={(e) => setSDesc(e.target.value)} />
+              </div>
+              
+              <div className="grid grid-cols-2 gap-6">
+                 <div className="space-y-2">
+                    <Label>Logo</Label>
+                    <div className="border border-dashed rounded-lg p-4 text-center space-y-2">
+                       {settings?.logo_url ? (
+                         <img src={settings.logo_url} className="h-12 mx-auto object-contain" alt="Logo" />
+                       ) : <ImageIcon className="h-8 w-8 mx-auto text-muted-foreground" />}
+                       <Input type="file" onChange={(e) => setLogoFile(e.target.files?.[0] || null)} className="text-xs" accept="image/*" />
+                    </div>
+                 </div>
+                 <div className="space-y-2">
+                    <Label>Favicon</Label>
+                    <div className="border border-dashed rounded-lg p-4 text-center space-y-2">
+                       {settings?.favicon_url ? (
+                         <img src={settings.favicon_url} className="h-8 w-8 mx-auto object-contain" alt="Favicon" />
+                       ) : <Globe className="h-8 w-8 mx-auto text-muted-foreground" />}
+                       <Input type="file" onChange={(e) => setFavFile(e.target.files?.[0] || null)} className="text-xs" accept="image/*" />
+                    </div>
+                 </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Footer Mətni</Label>
+                <Input value={sFooter} onChange={(e) => setSFooter(e.target.value)} />
+              </div>
+
+              <Button type="submit" disabled={saving} className="w-full">
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                Yadda Saxla
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  };
+
+  if (loading) return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
+
+  return (
+    <div className="min-h-screen bg-background flex">
+      <SEO title="Admin Dashboard" />
+      
+      {/* Sidebar */}
+      <aside className="w-64 border-r bg-muted/20 hidden md:block fixed h-full">
+        <div className="p-6">
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <LayoutDashboard className="w-6 h-6 text-primary" />
+            Admin
+          </h1>
+        </div>
+        <nav className="px-4 space-y-2">
+          <Button 
+            variant={activeView === 'dashboard' ? 'secondary' : 'ghost'} 
+            className="w-full justify-start" 
+            onClick={() => setActiveView('dashboard')}
+          >
+            <BarChart3 className="mr-2 h-4 w-4" /> Dashboard
+          </Button>
+          <Button 
+            variant={activeView === 'posts' ? 'secondary' : 'ghost'} 
+            className="w-full justify-start" 
+            onClick={() => setActiveView('posts')}
+          >
+            <FileText className="mr-2 h-4 w-4" /> Məqalələr
+          </Button>
+          <Button 
+            variant={activeView === 'categories' ? 'secondary' : 'ghost'} 
+            className="w-full justify-start" 
+            onClick={() => setActiveView('categories')}
+          >
+            <Tags className="mr-2 h-4 w-4" /> Kateqoriyalar
+          </Button>
+          <Button 
+            variant={activeView === 'settings' ? 'secondary' : 'ghost'} 
+            className="w-full justify-start" 
+            onClick={() => setActiveView('settings')}
+          >
+            <Settings className="mr-2 h-4 w-4" /> Ayarlar
+          </Button>
+        </nav>
+        <div className="absolute bottom-4 left-4 right-4">
+          <Button variant="outline" className="w-full text-destructive hover:text-destructive" onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" /> Çıxış
+          </Button>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 md:ml-64 p-8">
+        <div className="max-w-7xl mx-auto">
+          {activeView === 'dashboard' && <DashboardView />}
+          {activeView === 'posts' && <PostsManager />}
+          {activeView === 'categories' && <CategoriesManager />}
+          {activeView === 'settings' && <SettingsManager />}
+        </div>
       </main>
     </div>
   );

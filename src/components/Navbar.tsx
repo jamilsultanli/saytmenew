@@ -20,10 +20,10 @@ export const Navbar = ({ onSearchChange, searchValue }: NavbarProps) => {
         const { data, error } = await supabase.from('site_settings').select('site_name, logo_url').maybeSingle();
         if (!error && data) {
           if (data.site_name) setSiteName(data.site_name);
-          if (data.logo_url) setLogoUrl(data.logo_url);
+          // Append a timestamp to prevent aggressive caching if URL exists
+          if (data.logo_url) setLogoUrl(`${data.logo_url}?t=${new Date().getTime()}`);
         }
       } catch (e) {
-        // Silently fail if table doesn't exist yet
         console.log("Using default site settings");
       }
     };
@@ -36,12 +36,23 @@ export const Navbar = ({ onSearchChange, searchValue }: NavbarProps) => {
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 group cursor-pointer">
           {logoUrl ? (
-             <img src={logoUrl} alt={siteName} className="h-10 w-auto object-contain transition-transform group-hover:scale-105" />
-          ) : (
-            <div className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground shadow-lg overflow-hidden group-hover:scale-105 transition-transform">
-              <span className="text-xl font-bold">{siteName.charAt(0)}</span>
-            </div>
-          )}
+             <img 
+               src={logoUrl} 
+               alt={siteName} 
+               className="h-10 w-auto object-contain transition-transform group-hover:scale-105" 
+               onError={(e) => {
+                 // Fallback if image fails to load
+                 e.currentTarget.style.display = 'none';
+                 e.currentTarget.parentElement!.querySelector('.fallback-logo')!.classList.remove('hidden');
+               }}
+             />
+          ) : null}
+          
+          {/* Fallback Logo (Shown if no logoUrl or if image error) */}
+          <div className={`relative flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-primary-foreground shadow-lg overflow-hidden group-hover:scale-105 transition-transform fallback-logo ${logoUrl ? 'hidden' : ''}`}>
+             <span className="text-xl font-bold">{siteName.charAt(0)}</span>
+          </div>
+
           <div className="flex flex-col">
             <span className="text-lg font-bold tracking-tight leading-none hidden sm:block">{siteName}</span>
           </div>
