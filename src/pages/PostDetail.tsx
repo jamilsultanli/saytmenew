@@ -164,7 +164,7 @@ const PostDetail = () => {
         <div className="max-w-3xl mx-auto px-6 w-full">
           <article className="
             prose prose-lg md:prose-xl dark:prose-invert max-w-none w-full
-            whitespace-normal break-words hyphens-none
+            whitespace-pre-wrap break-words overflow-hidden
             prose-p:text-muted-foreground prose-p:leading-8 prose-p:font-normal
             prose-headings:text-foreground prose-headings:font-bold prose-headings:tracking-tight prose-headings:mt-12 prose-headings:mb-6 prose-headings:break-words
             prose-h2:text-2xl md:prose-h2:text-3xl prose-h3:text-xl md:prose-h3:text-2xl
@@ -177,7 +177,10 @@ const PostDetail = () => {
             [&_p]:mb-6 [&_ul]:mb-6 [&_ol]:mb-6
             text-left
           ">
-            <div dangerouslySetInnerHTML={{ __html: post.content_html }} />
+            <div 
+              className="w-full break-words whitespace-pre-wrap"
+              dangerouslySetInnerHTML={{ __html: post.content_html }} 
+            />
           </article>
 
           {/* Tags / Share / Navigation Footer */}
