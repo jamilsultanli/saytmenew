@@ -76,9 +76,9 @@ export const BentoCard = ({
         <div className={cn("space-y-3 transition-transform duration-300 group-hover:-translate-y-1", size === "square" && "text-center")}>
           <h3 className={cn("font-bold leading-tight", 
             image ? "text-white" : "text-card-foreground",
-            size === "hero" ? "text-2xl md:text-3xl max-w-lg" : 
-            size === "square" ? "text-base" : 
-            "text-lg"
+            size === "hero" ? "text-xl md:text-2xl max-w-lg" : 
+            size === "square" ? "text-sm" : 
+            "text-base"
           )}>
             {title}
           </h3>
