@@ -27,7 +27,7 @@ type Post = Database['public']['Tables']['posts']['Row'];
 const SQL_FIX_CODE = `-- BU KOD BÜTÜN CƏDVƏLLƏRİ SİLİB YENİDƏN YARADACAQ
 -- RLS (Təhlükəsizlik) söndürülmüş halda olacaq
 
--- 1. Mövcud cədvəlləri sil
+-- 1. Mövcud cədvəlləri sil (Təmizlik)
 DROP TABLE IF EXISTS public.posts;
 DROP TABLE IF EXISTS public.categories;
 
@@ -63,12 +63,15 @@ CREATE TABLE public.posts (
 ALTER TABLE public.categories DISABLE ROW LEVEL SECURITY;
 ALTER TABLE public.posts DISABLE ROW LEVEL SECURITY;
 
--- 5. Storage (Şəkillər üçün) buckets yarat (əgər yoxdursa)
+-- 5. Storage (Şəkillər üçün) buckets yarat
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('images', 'images', true)
 ON CONFLICT (id) DO NOTHING;
 
--- Storage üçün sadə icazə (şəkil yükləmək üçün)
+-- Storage icazələrini yenilə (Köhnələri silib yenisini yaradırıq ki, xəta olmasın)
+DROP POLICY IF EXISTS "Public Access" ON storage.objects;
+DROP POLICY IF EXISTS "Auth Upload" ON storage.objects;
+
 CREATE POLICY "Public Access" ON storage.objects FOR SELECT USING ( bucket_id = 'images' ); 
 CREATE POLICY "Auth Upload" ON storage.objects FOR INSERT TO authenticated WITH CHECK ( bucket_id = 'images' );
 `;
