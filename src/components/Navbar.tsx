@@ -62,10 +62,6 @@ export const Navbar = ({ onSearchChange, searchValue }: NavbarProps) => {
                <span className="text-xl font-bold">{siteName.charAt(0)}</span>
             </div>
           )}
-
-          <div className="flex flex-col">
-            <span className="text-lg font-bold tracking-tight leading-none hidden sm:block">{siteName}</span>
-          </div>
         </Link>
 
         {/* Search Bar */}
