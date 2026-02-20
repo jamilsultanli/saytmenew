@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { 
   LayoutDashboard, 
@@ -15,20 +16,18 @@ import {
   Tags, 
   LogOut, 
   Plus, 
-  Search, 
   Image as ImageIcon, 
   Loader2, 
   Trash2, 
   Edit, 
   Eye, 
   Save, 
-  UploadCloud,
   BarChart3,
-  Globe
+  Globe,
+  X
 } from "lucide-react";
 import { Database } from "@/integrations/supabase/types";
 import { SEO } from "@/components/SEO";
-import { cn } from "@/lib/utils";
 
 type Category = Database['public']['Tables']['categories']['Row'];
 type Post = Database['public']['Tables']['posts']['Row'];
@@ -84,7 +83,14 @@ const Admin = () => {
   };
 
   const fetchSettings = async () => {
-    const { data } = await supabase.from('site_settings').select('*').maybeSingle();
+    // FIX: Order by created_at DESC and limit 1 to handle potential duplicates
+    const { data } = await supabase
+      .from('site_settings')
+      .select('*')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+      
     if (data) setSettings(data);
   };
 
@@ -93,7 +99,7 @@ const Admin = () => {
     navigate('/');
   };
 
-  // --- Sub-Components (Internal for simpler state access) ---
+  // --- Sub-Components ---
 
   const DashboardView = () => (
     <div className="space-y-6 animate-in fade-in-50">
@@ -157,6 +163,7 @@ const Admin = () => {
     const [formTime, setFormTime] = useState("");
     const [formSize, setFormSize] = useState("standard");
     const [formFile, setFormFile] = useState<File | null>(null);
+    const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [formSeoTitle, setFormSeoTitle] = useState("");
     const [formSeoDesc, setFormSeoDesc] = useState("");
     const [uploading, setUploading] = useState(false);
@@ -164,7 +171,7 @@ const Admin = () => {
     const resetForm = () => {
       setIsEditing(false); setEditId(null);
       setFormTitle(""); setFormSlug(""); setFormContent(""); setFormCat("");
-      setFormTime(""); setFormSize("standard"); setFormFile(null);
+      setFormTime(""); setFormSize("standard"); setFormFile(null); setImagePreview(null);
       setFormSeoTitle(""); setFormSeoDesc("");
     };
 
@@ -179,6 +186,7 @@ const Admin = () => {
       setFormSize(post.card_size || "standard");
       setFormSeoTitle(post.seo_title || "");
       setFormSeoDesc(post.seo_description || "");
+      setImagePreview(post.thumbnail_url);
     };
 
     const deletePost = async (id: string) => {
@@ -186,6 +194,13 @@ const Admin = () => {
       await supabase.from('posts').delete().eq('id', id);
       toast.success("Məqalə silindi");
       fetchPosts();
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files?.[0]) {
+        setFormFile(e.target.files[0]);
+        setImagePreview(URL.createObjectURL(e.target.files[0]));
+      }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -293,7 +308,8 @@ const Admin = () => {
                   </div>
                   <div className="grid gap-2">
                     <Label>Şəkil</Label>
-                    <Input type="file" onChange={(e) => setFormFile(e.target.files?.[0] || null)} />
+                    <Input type="file" onChange={handleFileSelect} />
+                    {imagePreview && <img src={imagePreview} className="mt-2 h-20 w-auto rounded border" alt="Preview" />}
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -419,12 +435,22 @@ const Admin = () => {
   };
 
   const SettingsManager = () => {
+    // Initialize state with props, but also sync with useEffect
     const [sName, setSName] = useState(settings?.site_name || "");
     const [sDesc, setSDesc] = useState(settings?.site_description || "");
     const [sFooter, setSFooter] = useState(settings?.footer_text || "");
     const [logoFile, setLogoFile] = useState<File | null>(null);
     const [favFile, setFavFile] = useState<File | null>(null);
     const [saving, setSaving] = useState(false);
+
+    // FIX: Sync state when settings are loaded/updated from parent
+    useEffect(() => {
+        if (settings) {
+            setSName(settings.site_name || "");
+            setSDesc(settings.site_description || "");
+            setSFooter(settings.footer_text || "");
+        }
+    }, [settings]);
 
     const handleSave = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -435,7 +461,6 @@ const Admin = () => {
 
         // Upload Helper with Sanitization
         const upload = async (f: File) => {
-           // Safe filename generation
            const fileExt = f.name.split('.').pop();
            const randomName = Math.random().toString(36).substring(7);
            const safeName = `asset-${Date.now()}-${randomName}.${fileExt}`;
@@ -457,16 +482,32 @@ const Admin = () => {
           favicon_url: favUrl
         };
 
-        if (settings?.id) {
-          await supabase.from('site_settings').update(payload).eq('id', settings.id);
+        // Handle create/update logic robustly
+        let targetId = settings?.id;
+        
+        // If we don't have an ID in state, check DB one last time
+        if (!targetId) {
+             const { data } = await supabase.from('site_settings').select('id').order('created_at', {ascending: false}).limit(1).maybeSingle();
+             if (data) targetId = data.id;
+        }
+
+        if (targetId) {
+          const { error } = await supabase.from('site_settings').update(payload).eq('id', targetId);
+          if (error) throw error;
         } else {
-          await supabase.from('site_settings').insert(payload);
+          const { error } = await supabase.from('site_settings').insert(payload);
+          if (error) throw error;
         }
         
         await fetchSettings();
-        // Force reload to update Navbar logos
-        window.location.reload();
+        
+        // FIX: Don't reload page, dispatch event instead
+        window.dispatchEvent(new Event('settings-updated'));
+        
         toast.success("Ayarlar yadda saxlanıldı!");
+        // Clear file inputs
+        setLogoFile(null);
+        setFavFile(null);
       } catch (e: any) {
         toast.error("Xəta: " + e.message);
       } finally {

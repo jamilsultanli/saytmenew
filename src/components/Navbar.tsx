@@ -14,20 +14,29 @@ export const Navbar = ({ onSearchChange, searchValue }: NavbarProps) => {
   const [siteName, setSiteName] = useState("Sayt.me");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const { data, error } = await supabase.from('site_settings').select('site_name, logo_url').maybeSingle();
-        if (!error && data) {
-          if (data.site_name) setSiteName(data.site_name);
-          // Append a timestamp to prevent aggressive caching if URL exists
-          if (data.logo_url) setLogoUrl(`${data.logo_url}?t=${new Date().getTime()}`);
-        }
-      } catch (e) {
-        console.log("Using default site settings");
+  const fetchSettings = async () => {
+    try {
+      const { data, error } = await supabase.from('site_settings').select('site_name, logo_url').order('created_at', {ascending: false}).limit(1).maybeSingle();
+      if (!error && data) {
+        if (data.site_name) setSiteName(data.site_name);
+        // Append a timestamp to prevent aggressive caching if URL exists
+        if (data.logo_url) setLogoUrl(`${data.logo_url}?t=${new Date().getTime()}`);
       }
-    };
+    } catch (e) {
+      console.log("Using default site settings");
+    }
+  };
+
+  useEffect(() => {
     fetchSettings();
+
+    // Listen for updates from Admin panel
+    const handleUpdate = () => {
+        fetchSettings();
+    };
+
+    window.addEventListener('settings-updated', handleUpdate);
+    return () => window.removeEventListener('settings-updated', handleUpdate);
   }, []);
 
   return (
