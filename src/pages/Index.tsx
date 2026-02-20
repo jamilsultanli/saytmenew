@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { BentoCard } from "@/components/BentoCard";
 import { FilterBar } from "@/components/FilterBar";
 import { FloatingAbout } from "@/components/FloatingAbout";
@@ -6,66 +5,60 @@ import { Navbar } from "@/components/Navbar";
 import { supabase } from "@/integrations/supabase/client";
 import { Database } from "@/integrations/supabase/types";
 import { getIconForCategory } from "@/utils/icon-mapping";
-import { Loader2 } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import { SEO } from "@/components/SEO";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
 type Post = Database['public']['Tables']['posts']['Row'] & {
   categories: Database['public']['Tables']['categories']['Row']
 };
 
-type SiteSettings = Database['public']['Tables']['site_settings']['Row'];
-type Category = Database['public']['Tables']['categories']['Row'];
-
 const Index = () => {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [settings, setSettings] = useState<SiteSettings | null>(null);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-
-  // Get active category from URL or default to "all"
   const activeCategory = searchParams.get("category") || "all";
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Execute all requests in parallel
-        const [postsResult, settingsResult, categoriesResult] = await Promise.all([
-          supabase
-            .from('posts')
-            .select(`*, categories:category_id (*)`)
-            .order('published_at', { ascending: false }),
-          
-          supabase
-            .from('site_settings')
-            .select('*')
-            .order('updated_at', { ascending: false })
-            .limit(1)
-            .maybeSingle(),
+  // Fetch Site Settings
+  const { data: settings } = useQuery({
+    queryKey: ['siteSettings'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('site_settings')
+        .select('*')
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    }
+  });
 
-          supabase
-            .from('categories')
-            .select('*')
-            .order('name_az')
-        ]);
-        
-        if (postsResult.data) setPosts(postsResult.data as unknown as Post[]);
-        if (settingsResult.data) setSettings(settingsResult.data);
-        if (categoriesResult.data) setCategories(categoriesResult.data);
+  // Fetch Categories
+  const { data: categories = [], isLoading: catsLoading } = useQuery({
+    queryKey: ['categories'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name_az');
+      return data || [];
+    }
+  });
 
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  // Fetch Posts
+  const { data: posts = [], isLoading: postsLoading } = useQuery({
+    queryKey: ['posts'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('posts')
+        .select(`*, categories:category_id (*)`)
+        .order('published_at', { ascending: false });
+      return (data as unknown as Post[]) || [];
+    }
+  });
 
-    fetchData();
-  }, []);
+  const loading = catsLoading || postsLoading;
 
   const handleCategoryChange = (slug: string) => {
     if (slug === 'all') {
@@ -94,7 +87,6 @@ const Index = () => {
     ? (settings?.site_description || "Marketinq nümunələri və strategiyaları")
     : `${activeCategoryData?.name_az} sahəsində ən son tendensiyalar, real biznes nümunələri, brendinq strategiyaları və analizlər.`;
 
-  // Schema Markup for WebSite
   const schemaMarkup = {
     "@context": "https://schema.org",
     "@type": "WebSite",
@@ -148,7 +140,6 @@ const Index = () => {
            )}
         </div>
 
-        {/* Filter Bar with CLS protection */}
         <div className="min-h-[60px] mb-10">
           {loading ? (
             <div className="flex justify-center gap-3">
@@ -167,7 +158,6 @@ const Index = () => {
         </div>
         
         {loading ? (
-          /* Skeleton Grid */
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 auto-rows-[300px]">
              <Skeleton className="md:col-span-2 md:row-span-2 rounded-3xl" />
              <Skeleton className="md:col-span-1 md:row-span-1 rounded-3xl" />
@@ -194,7 +184,6 @@ const Index = () => {
             )}
           </div>
         ) : (
-          /* Bento Grid */
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 auto-rows-[300px] animate-in fade-in duration-500">
             {filteredPosts.map((post, index) => (
               <Link 
@@ -215,7 +204,7 @@ const Index = () => {
                   image={post.thumbnail_url}
                   icon={post.card_size === 'square' ? getIconForCategory(post.categories?.slug || '') : undefined}
                   className="h-full"
-                  priority={index < 2} // Prioritize the first two images for LCP
+                  priority={index < 2} 
                 />
               </Link>
             ))}
@@ -223,7 +212,6 @@ const Index = () => {
         )}
       </main>
 
-      {/* Footer */}
       <footer className="border-t border-border py-8 mt-12 bg-muted/30">
         <div className="max-w-7xl mx-auto px-6 text-center text-sm text-muted-foreground">
           <p>{settings?.footer_text || `© ${new Date().getFullYear()} Bütün hüquqlar qorunur.`}</p>

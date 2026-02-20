@@ -6,14 +6,32 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import { ThemeProvider } from "@/components/theme-provider";
 import { GlobalScripts } from "@/components/GlobalScripts";
+import { lazy, Suspense } from "react";
+import { Loader2 } from "lucide-react";
 
-import Index from "./pages/Index";
-import Login from "./pages/Login";
-import Admin from "./pages/Admin";
-import PostDetail from "./pages/PostDetail";
-import NotFound from "./pages/NotFound";
+// Lazy load pages
+const Index = lazy(() => import("./pages/Index"));
+const Login = lazy(() => import("./pages/Login"));
+const Admin = lazy(() => import("./pages/Admin"));
+const PostDetail = lazy(() => import("./pages/PostDetail"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
-const queryClient = new QueryClient();
+// Create a client
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // Data remains fresh for 5 minutes
+      gcTime: 1000 * 60 * 30, // Cache remains for 30 minutes
+      refetchOnWindowFocus: false, // Prevent refetching when switching tabs
+    },
+  },
+});
+
+const PageLoader = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+  </div>
+);
 
 const App = () => (
   <HelmetProvider>
@@ -24,13 +42,15 @@ const App = () => (
           <Toaster />
           <Sonner />
           <BrowserRouter>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/post/:slug" element={<PostDetail />} />
-              <Route path="/login" element={<Login />} />
-              <Route path="/admin" element={<Admin />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
+            <Suspense fallback={<PageLoader />}>
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/post/:slug" element={<PostDetail />} />
+                <Route path="/login" element={<Login />} />
+                <Route path="/admin" element={<Admin />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
           </BrowserRouter>
         </TooltipProvider>
       </ThemeProvider>

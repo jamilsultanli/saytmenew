@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/Navbar";
 import { FloatingAbout } from "@/components/FloatingAbout";
 import { Database } from "@/integrations/supabase/types";
-import { Clock, Calendar, ChevronLeft, Share2, Copy, ArrowRight } from "lucide-react";
+import { Clock, Calendar, ChevronLeft, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import { az } from "date-fns/locale";
@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { BentoCard } from "@/components/BentoCard";
 import { getIconForCategory } from "@/utils/icon-mapping";
 import { optimizeImage, generateSrcSet } from "@/utils/image-optimizer";
+import { useQuery } from "@tanstack/react-query";
 
 type Post = Database['public']['Tables']['posts']['Row'] & {
   categories: Database['public']['Tables']['categories']['Row']
@@ -21,69 +22,58 @@ type Post = Database['public']['Tables']['posts']['Row'] & {
 const PostDetail = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
-  const [post, setPost] = useState<Post | null>(null);
-  const [relatedPosts, setRelatedPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [siteSettings, setSiteSettings] = useState<{
-    favicon_url: string | null, 
-    author_name: string | null, 
-    author_image: string | null 
-  } | null>(null);
 
   useEffect(() => {
-    if (slug) {
-      window.scrollTo(0, 0); 
-      fetchData(slug);
-    }
+    window.scrollTo(0, 0);
   }, [slug]);
 
-  const fetchData = async (slug: string) => {
-    setLoading(true);
-    try {
-      // Fetch settings and post in parallel
-      const [settingsResult, postResult] = await Promise.all([
-        supabase
-          .from('site_settings')
-          .select('favicon_url, author_name, author_image')
-          .single(),
-        
-        supabase
-          .from('posts')
-          .select(`*, categories:category_id (*)`)
-          .eq('slug', slug)
-          .single()
-      ]);
+  // Fetch Settings (Cached)
+  const { data: siteSettings } = useQuery({
+    queryKey: ['siteSettings'],
+    queryFn: async () => {
+      const { data } = await supabase.from('site_settings').select('favicon_url, author_name, author_image').single();
+      return data;
+    },
+    staleTime: 1000 * 60 * 30 // 30 minutes
+  });
 
-      if (settingsResult.data) {
-        setSiteSettings(settingsResult.data);
-      }
-
-      if (postResult.error) throw postResult.error;
+  // Fetch Post
+  const { data: post, isLoading, isError } = useQuery({
+    queryKey: ['post', slug],
+    queryFn: async () => {
+      if (!slug) throw new Error("No slug");
+      const { data, error } = await supabase
+        .from('posts')
+        .select(`*, categories:category_id (*)`)
+        .eq('slug', slug)
+        .single();
       
-      if (postResult.data) {
-        const currentPost = postResult.data as unknown as Post;
-        setPost(currentPost);
-        // We have to wait for the post to get the category_id
-        fetchRelatedPosts(currentPost.category_id, currentPost.id);
-      }
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      navigate('/404');
-    } finally {
-      setLoading(false);
-    }
-  };
+      if (error) throw error;
+      return data as unknown as Post;
+    },
+    enabled: !!slug
+  });
 
-  const fetchRelatedPosts = async (categoryId: string, currentPostId: string) => {
-     const { data } = await supabase
-       .from('posts')
-       .select(`*, categories:category_id (*)`)
-       .eq('category_id', categoryId)
-       .neq('id', currentPostId)
-       .limit(3); 
-     
-     if (data) setRelatedPosts(data as unknown as Post[]);
-  };
+  // Fetch Related Posts
+  const { data: relatedPosts = [] } = useQuery({
+    queryKey: ['relatedPosts', post?.category_id, post?.id],
+    queryFn: async () => {
+      if (!post?.category_id) return [];
+      const { data } = await supabase
+        .from('posts')
+        .select(`*, categories:category_id (*)`)
+        .eq('category_id', post.category_id)
+        .neq('id', post.id)
+        .limit(3);
+      return (data as unknown as Post[]) || [];
+    },
+    enabled: !!post?.category_id
+  });
+
+  if (isError) {
+    navigate('/404');
+    return null;
+  }
 
   const handleShare = async () => {
     if (!post) return;
@@ -100,8 +90,7 @@ const PostDetail = () => {
     }
   };
 
-  if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>;
-  if (!post) return null;
+  if (isLoading || !post) return <div className="min-h-screen bg-background flex items-center justify-center"><div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div></div>;
 
   // Schema for SEO
   const articleSchema = {
