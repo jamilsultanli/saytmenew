@@ -164,9 +164,9 @@ const PostDetail = () => {
         <div className="max-w-3xl mx-auto px-6 w-full">
           <article className="
             prose prose-lg md:prose-xl dark:prose-invert max-w-none w-full
-            overflow-hidden
-            prose-p:text-muted-foreground prose-p:leading-8 prose-p:font-normal
-            prose-headings:text-foreground prose-headings:font-bold prose-headings:tracking-tight prose-headings:mt-12 prose-headings:mb-6 prose-headings:break-words
+            overflow-hidden [word-break:normal] [overflow-wrap:break-word]
+            prose-p:text-muted-foreground prose-p:leading-8 prose-p:font-normal prose-p:whitespace-normal
+            prose-headings:text-foreground prose-headings:font-bold prose-headings:tracking-tight prose-headings:mt-12 prose-headings:mb-6
             prose-h2:text-2xl md:prose-h2:text-3xl prose-h3:text-xl md:prose-h3:text-2xl
             prose-a:text-primary prose-a:font-medium prose-a:underline prose-a:underline-offset-4 hover:prose-a:text-primary/80 prose-a:break-all
             prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-6 prose-blockquote:italic prose-blockquote:text-foreground prose-blockquote:font-medium prose-blockquote:bg-muted/20 prose-blockquote:py-2 prose-blockquote:rounded-r-lg
@@ -178,7 +178,7 @@ const PostDetail = () => {
             text-left
           ">
             <div 
-              className="w-full"
+              className="w-full whitespace-normal"
               dangerouslySetInnerHTML={{ __html: post.content_html }} 
             />
           </article>
